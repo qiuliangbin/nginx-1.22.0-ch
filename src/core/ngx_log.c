@@ -320,11 +320,11 @@ ngx_log_init(u_char *prefix, u_char *error_log)
     u_char  *p, *name;
     size_t   nlen, plen;
 
-    ngx_log.file = &ngx_log_file;
-    ngx_log.log_level = NGX_LOG_NOTICE;
+    ngx_log.file = &ngx_log_file;//文件信息
+    ngx_log.log_level = NGX_LOG_NOTICE;//日志级别
 
     if (error_log == NULL) {
-        error_log = (u_char *) NGX_ERROR_LOG_PATH;
+        error_log = (u_char *) NGX_ERROR_LOG_PATH;//缺省错误日志存放路径
     }
 
     name = error_log;
@@ -342,8 +342,8 @@ ngx_log_init(u_char *prefix, u_char *error_log)
 #else
     if (name[0] != '/') {
 #endif
-
-        if (prefix) {
+        // 相对路径
+        if (prefix) { // 运行参数[-p]指定，一般情况下不指定
             plen = ngx_strlen(prefix);
 
         } else {
@@ -372,7 +372,7 @@ ngx_log_init(u_char *prefix, u_char *error_log)
             p = name;
         }
     }
-
+    // 以追加方式打开日志文件, 设置日志文件句柄
     ngx_log_file.fd = ngx_open_file(name, NGX_FILE_APPEND,
                                     NGX_FILE_CREATE_OR_OPEN,
                                     NGX_FILE_DEFAULT_ACCESS);

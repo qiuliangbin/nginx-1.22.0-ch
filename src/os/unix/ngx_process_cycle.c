@@ -747,9 +747,13 @@ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
     }
 }
 
-
-static void
-ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
+/**
+ * @description: 模块的worker进程初始化init_process
+ * @param {ngx_cycle_t} *cycle Nginx全局变量
+ * @param {ngx_int_t} worker 进程编排序号
+ * @return {*}
+ */
+static void ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
 {
     sigset_t          set;
     ngx_int_t         n;
@@ -896,7 +900,7 @@ ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
     for (i = 0; i < cycle->listening.nelts; i++) {
         ls[i].previous = NULL;
     }
-
+    //  对模块进程初始化 - 这边初始化的是所有的模块有init_process回调函数的进行初始化工作
     for (i = 0; cycle->modules[i]; i++) {
         if (cycle->modules[i]->init_process) {
             if (cycle->modules[i]->init_process(cycle) == NGX_ERROR) {

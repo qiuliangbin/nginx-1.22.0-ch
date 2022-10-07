@@ -4,104 +4,102 @@
  * Copyright (C) Nginx, Inc.
  */
 
-
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_event.h>
 #include <ngx_channel.h>
 
-
-typedef struct {
-    int     signo;
-    char   *signame;
-    char   *name;
-    void  (*handler)(int signo, siginfo_t *siginfo, void *ucontext);
+typedef struct
+{
+    int signo;
+    char *signame;
+    char *name;
+    void (*handler)(int signo, siginfo_t *siginfo, void *ucontext);
 } ngx_signal_t;
-
-
 
 static void ngx_execute_proc(ngx_cycle_t *cycle, void *data);
 static void ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext);
 static void ngx_process_get_status(void);
 static void ngx_unlock_mutexes(ngx_pid_t pid);
 
+int ngx_argc;    //命令行参数个数
+char **ngx_argv; //命令行参数
+char **ngx_os_argv;
 
-int              ngx_argc;
-char           **ngx_argv;
-char           **ngx_os_argv;
+ngx_int_t ngx_process_slot;
+ngx_socket_t ngx_channel;
+ngx_int_t ngx_last_process;
+ngx_process_t ngx_processes[NGX_MAX_PROCESSES];
 
-ngx_int_t        ngx_process_slot;
-ngx_socket_t     ngx_channel;
-ngx_int_t        ngx_last_process;
-ngx_process_t    ngx_processes[NGX_MAX_PROCESSES];
+ngx_signal_t signals[] = {
+    {ngx_signal_value(NGX_RECONFIGURE_SIGNAL),
+     "SIG" ngx_value(NGX_RECONFIGURE_SIGNAL),
+     "reload",
+     ngx_signal_handler},
 
+    {ngx_signal_value(NGX_REOPEN_SIGNAL),
+     "SIG" ngx_value(NGX_REOPEN_SIGNAL),
+     "reopen",
+     ngx_signal_handler},
 
-ngx_signal_t  signals[] = {
-    { ngx_signal_value(NGX_RECONFIGURE_SIGNAL),
-      "SIG" ngx_value(NGX_RECONFIGURE_SIGNAL),
-      "reload",
-      ngx_signal_handler },
+    {ngx_signal_value(NGX_NOACCEPT_SIGNAL),
+     "SIG" ngx_value(NGX_NOACCEPT_SIGNAL),
+     "",
+     ngx_signal_handler},
 
-    { ngx_signal_value(NGX_REOPEN_SIGNAL),
-      "SIG" ngx_value(NGX_REOPEN_SIGNAL),
-      "reopen",
-      ngx_signal_handler },
+    {ngx_signal_value(NGX_TERMINATE_SIGNAL),
+     "SIG" ngx_value(NGX_TERMINATE_SIGNAL),
+     "stop",
+     ngx_signal_handler},
 
-    { ngx_signal_value(NGX_NOACCEPT_SIGNAL),
-      "SIG" ngx_value(NGX_NOACCEPT_SIGNAL),
-      "",
-      ngx_signal_handler },
+    {ngx_signal_value(NGX_SHUTDOWN_SIGNAL),
+     "SIG" ngx_value(NGX_SHUTDOWN_SIGNAL),
+     "quit",
+     ngx_signal_handler},
 
-    { ngx_signal_value(NGX_TERMINATE_SIGNAL),
-      "SIG" ngx_value(NGX_TERMINATE_SIGNAL),
-      "stop",
-      ngx_signal_handler },
+    {ngx_signal_value(NGX_CHANGEBIN_SIGNAL),
+     "SIG" ngx_value(NGX_CHANGEBIN_SIGNAL),
+     "",
+     ngx_signal_handler},
 
-    { ngx_signal_value(NGX_SHUTDOWN_SIGNAL),
-      "SIG" ngx_value(NGX_SHUTDOWN_SIGNAL),
-      "quit",
-      ngx_signal_handler },
+    {SIGALRM, "SIGALRM", "", ngx_signal_handler},
 
-    { ngx_signal_value(NGX_CHANGEBIN_SIGNAL),
-      "SIG" ngx_value(NGX_CHANGEBIN_SIGNAL),
-      "",
-      ngx_signal_handler },
+    {SIGINT, "SIGINT", "", ngx_signal_handler},
 
-    { SIGALRM, "SIGALRM", "", ngx_signal_handler },
+    {SIGIO, "SIGIO", "", ngx_signal_handler},
 
-    { SIGINT, "SIGINT", "", ngx_signal_handler },
+    {SIGCHLD, "SIGCHLD", "", ngx_signal_handler},
 
-    { SIGIO, "SIGIO", "", ngx_signal_handler },
+    {SIGSYS, "SIGSYS, SIG_IGN", "", NULL},
 
-    { SIGCHLD, "SIGCHLD", "", ngx_signal_handler },
+    {SIGPIPE, "SIGPIPE, SIG_IGN", "", NULL},
 
-    { SIGSYS, "SIGSYS, SIG_IGN", "", NULL },
-
-    { SIGPIPE, "SIGPIPE, SIG_IGN", "", NULL },
-
-    { 0, NULL, "", NULL }
-};
-
+    {0, NULL, "", NULL}};
 
 ngx_pid_t
 ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
-    char *name, ngx_int_t respawn)
+                  char *name, ngx_int_t respawn)
 {
-    u_long     on;
-    ngx_pid_t  pid;
-    ngx_int_t  s;
+    u_long on;
+    ngx_pid_t pid;
+    ngx_int_t s;
 
-    if (respawn >= 0) {
+    if (respawn >= 0)
+    {
         s = respawn;
-
-    } else {
-        for (s = 0; s < ngx_last_process; s++) {
-            if (ngx_processes[s].pid == -1) {
+    }
+    else
+    {
+        for (s = 0; s < ngx_last_process; s++)
+        {
+            if (ngx_processes[s].pid == -1)
+            {
                 break;
             }
         }
 
-        if (s == NGX_MAX_PROCESSES) {
+        if (s == NGX_MAX_PROCESSES)
+        {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, 0,
                           "no more than %d processes can be spawned",
                           NGX_MAX_PROCESSES);
@@ -109,8 +107,8 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
         }
     }
 
-
-    if (respawn != NGX_PROCESS_DETACHED) {
+    if (respawn != NGX_PROCESS_DETACHED)
+    {
 
         /* Solaris 9 still has no AF_LOCAL */
 
@@ -126,7 +124,8 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
                        ngx_processes[s].channel[0],
                        ngx_processes[s].channel[1]);
 
-        if (ngx_nonblocking(ngx_processes[s].channel[0]) == -1) {
+        if (ngx_nonblocking(ngx_processes[s].channel[0]) == -1)
+        {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           ngx_nonblocking_n " failed while spawning \"%s\"",
                           name);
@@ -134,7 +133,8 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
             return NGX_INVALID_PID;
         }
 
-        if (ngx_nonblocking(ngx_processes[s].channel[1]) == -1) {
+        if (ngx_nonblocking(ngx_processes[s].channel[1]) == -1)
+        {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           ngx_nonblocking_n " failed while spawning \"%s\"",
                           name);
@@ -143,49 +143,54 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
         }
 
         on = 1;
-        if (ioctl(ngx_processes[s].channel[0], FIOASYNC, &on) == -1) {
+        if (ioctl(ngx_processes[s].channel[0], FIOASYNC, &on) == -1)
+        {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "ioctl(FIOASYNC) failed while spawning \"%s\"", name);
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
 
-        if (fcntl(ngx_processes[s].channel[0], F_SETOWN, ngx_pid) == -1) {
+        if (fcntl(ngx_processes[s].channel[0], F_SETOWN, ngx_pid) == -1)
+        {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "fcntl(F_SETOWN) failed while spawning \"%s\"", name);
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
 
-        if (fcntl(ngx_processes[s].channel[0], F_SETFD, FD_CLOEXEC) == -1) {
+        if (fcntl(ngx_processes[s].channel[0], F_SETFD, FD_CLOEXEC) == -1)
+        {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "fcntl(FD_CLOEXEC) failed while spawning \"%s\"",
-                           name);
+                          name);
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
 
-        if (fcntl(ngx_processes[s].channel[1], F_SETFD, FD_CLOEXEC) == -1) {
+        if (fcntl(ngx_processes[s].channel[1], F_SETFD, FD_CLOEXEC) == -1)
+        {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "fcntl(FD_CLOEXEC) failed while spawning \"%s\"",
-                           name);
+                          name);
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
 
         ngx_channel = ngx_processes[s].channel[1];
-
-    } else {
+    }
+    else
+    {
         ngx_processes[s].channel[0] = -1;
         ngx_processes[s].channel[1] = -1;
     }
 
     ngx_process_slot = s;
 
-
     pid = fork();
 
-    switch (pid) {
+    switch (pid)
+    {
 
     case -1:
         ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
@@ -208,7 +213,8 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
     ngx_processes[s].pid = pid;
     ngx_processes[s].exited = 0;
 
-    if (respawn >= 0) {
+    if (respawn >= 0)
+    {
         return pid;
     }
 
@@ -217,7 +223,8 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
     ngx_processes[s].name = name;
     ngx_processes[s].exiting = 0;
 
-    switch (respawn) {
+    switch (respawn)
+    {
 
     case NGX_PROCESS_NORESPAWN:
         ngx_processes[s].respawn = 0;
@@ -250,13 +257,13 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
         break;
     }
 
-    if (s == ngx_last_process) {
+    if (s == ngx_last_process)
+    {
         ngx_last_process++;
     }
 
     return pid;
 }
-
 
 ngx_pid_t
 ngx_execute(ngx_cycle_t *cycle, ngx_exec_ctx_t *ctx)
@@ -265,13 +272,13 @@ ngx_execute(ngx_cycle_t *cycle, ngx_exec_ctx_t *ctx)
                              NGX_PROCESS_DETACHED);
 }
 
-
 static void
 ngx_execute_proc(ngx_cycle_t *cycle, void *data)
 {
-    ngx_exec_ctx_t  *ctx = data;
+    ngx_exec_ctx_t *ctx = data;
 
-    if (execve(ctx->path, ctx->argv, ctx->envp) == -1) {
+    if (execve(ctx->path, ctx->argv, ctx->envp) == -1)
+    {
         ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                       "execve() failed while executing %s \"%s\"",
                       ctx->name, ctx->path);
@@ -280,26 +287,29 @@ ngx_execute_proc(ngx_cycle_t *cycle, void *data)
     exit(1);
 }
 
-
 ngx_int_t
 ngx_init_signals(ngx_log_t *log)
 {
-    ngx_signal_t      *sig;
-    struct sigaction   sa;
+    ngx_signal_t *sig;
+    struct sigaction sa;
 
-    for (sig = signals; sig->signo != 0; sig++) {
+    for (sig = signals; sig->signo != 0; sig++)
+    {
         ngx_memzero(&sa, sizeof(struct sigaction));
 
-        if (sig->handler) {
+        if (sig->handler)
+        {
             sa.sa_sigaction = sig->handler;
             sa.sa_flags = SA_SIGINFO;
-
-        } else {
+        }
+        else
+        {
             sa.sa_handler = SIG_IGN;
         }
 
         sigemptyset(&sa.sa_mask);
-        if (sigaction(sig->signo, &sa, NULL) == -1) {
+        if (sigaction(sig->signo, &sa, NULL) == -1)
+        {
 #if (NGX_VALGRIND)
             ngx_log_error(NGX_LOG_ALERT, log, ngx_errno,
                           "sigaction(%s) failed, ignored", sig->signame);
@@ -314,21 +324,22 @@ ngx_init_signals(ngx_log_t *log)
     return NGX_OK;
 }
 
-
 static void
 ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
 {
-    char            *action;
-    ngx_int_t        ignore;
-    ngx_err_t        err;
-    ngx_signal_t    *sig;
+    char *action;
+    ngx_int_t ignore;
+    ngx_err_t err;
+    ngx_signal_t *sig;
 
     ignore = 0;
 
     err = ngx_errno;
 
-    for (sig = signals; sig->signo != 0; sig++) {
-        if (sig->signo == signo) {
+    for (sig = signals; sig->signo != 0; sig++)
+    {
+        if (sig->signo == signo)
+        {
             break;
         }
     }
@@ -337,11 +348,13 @@ ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
 
     action = "";
 
-    switch (ngx_process) {
+    switch (ngx_process)
+    {
 
     case NGX_PROCESS_MASTER:
     case NGX_PROCESS_SINGLE:
-        switch (signo) {
+        switch (signo)
+        {
 
         case ngx_signal_value(NGX_SHUTDOWN_SIGNAL):
             ngx_quit = 1;
@@ -355,7 +368,8 @@ ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
             break;
 
         case ngx_signal_value(NGX_NOACCEPT_SIGNAL):
-            if (ngx_daemonized) {
+            if (ngx_daemonized)
+            {
                 ngx_noaccept = 1;
                 action = ", stop accepting connections";
             }
@@ -372,7 +386,8 @@ ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
             break;
 
         case ngx_signal_value(NGX_CHANGEBIN_SIGNAL):
-            if (ngx_getppid() == ngx_parent || ngx_new_binary > 0) {
+            if (ngx_getppid() == ngx_parent || ngx_new_binary > 0)
+            {
 
                 /*
                  * Ignore the signal in the new binary if its parent is
@@ -407,10 +422,12 @@ ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
 
     case NGX_PROCESS_WORKER:
     case NGX_PROCESS_HELPER:
-        switch (signo) {
+        switch (signo)
+        {
 
         case ngx_signal_value(NGX_NOACCEPT_SIGNAL):
-            if (!ngx_daemonized) {
+            if (!ngx_daemonized)
+            {
                 break;
             }
             ngx_debug_quit = 1;
@@ -441,59 +458,67 @@ ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
         break;
     }
 
-    if (siginfo && siginfo->si_pid) {
+    if (siginfo && siginfo->si_pid)
+    {
         ngx_log_error(NGX_LOG_NOTICE, ngx_cycle->log, 0,
                       "signal %d (%s) received from %P%s",
                       signo, sig->signame, siginfo->si_pid, action);
-
-    } else {
+    }
+    else
+    {
         ngx_log_error(NGX_LOG_NOTICE, ngx_cycle->log, 0,
                       "signal %d (%s) received%s",
                       signo, sig->signame, action);
     }
 
-    if (ignore) {
+    if (ignore)
+    {
         ngx_log_error(NGX_LOG_CRIT, ngx_cycle->log, 0,
                       "the changing binary signal is ignored: "
                       "you should shutdown or terminate "
                       "before either old or new binary's process");
     }
 
-    if (signo == SIGCHLD) {
+    if (signo == SIGCHLD)
+    {
         ngx_process_get_status();
     }
 
     ngx_set_errno(err);
 }
 
-
 static void
 ngx_process_get_status(void)
 {
-    int              status;
-    char            *process;
-    ngx_pid_t        pid;
-    ngx_err_t        err;
-    ngx_int_t        i;
-    ngx_uint_t       one;
+    int status;
+    char *process;
+    ngx_pid_t pid;
+    ngx_err_t err;
+    ngx_int_t i;
+    ngx_uint_t one;
 
     one = 0;
 
-    for ( ;; ) {
+    for (;;)
+    {
         pid = waitpid(-1, &status, WNOHANG);
 
-        if (pid == 0) {
+        if (pid == 0)
+        {
             return;
         }
 
-        if (pid == -1) {
+        if (pid == -1)
+        {
             err = ngx_errno;
 
-            if (err == NGX_EINTR) {
+            if (err == NGX_EINTR)
+            {
                 continue;
             }
 
-            if (err == NGX_ECHILD && one) {
+            if (err == NGX_ECHILD && one)
+            {
                 return;
             }
 
@@ -506,7 +531,8 @@ ngx_process_get_status(void)
              * despite waitpid() may be already called for this process.
              */
 
-            if (err == NGX_ECHILD) {
+            if (err == NGX_ECHILD)
+            {
                 ngx_log_error(NGX_LOG_INFO, ngx_cycle->log, err,
                               "waitpid() failed");
                 return;
@@ -517,12 +543,13 @@ ngx_process_get_status(void)
             return;
         }
 
-
         one = 1;
         process = "unknown process";
 
-        for (i = 0; i < ngx_last_process; i++) {
-            if (ngx_processes[i].pid == pid) {
+        for (i = 0; i < ngx_last_process; i++)
+        {
+            if (ngx_processes[i].pid == pid)
+            {
                 ngx_processes[i].status = status;
                 ngx_processes[i].exited = 1;
                 process = ngx_processes[i].name;
@@ -530,7 +557,8 @@ ngx_process_get_status(void)
             }
         }
 
-        if (WTERMSIG(status)) {
+        if (WTERMSIG(status))
+        {
 #ifdef WCOREDUMP
             ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
                           "%s %P exited on signal %d%s",
@@ -541,14 +569,16 @@ ngx_process_get_status(void)
                           "%s %P exited on signal %d",
                           process, pid, WTERMSIG(status));
 #endif
-
-        } else {
+        }
+        else
+        {
             ngx_log_error(NGX_LOG_NOTICE, ngx_cycle->log, 0,
                           "%s %P exited with code %d",
                           process, pid, WEXITSTATUS(status));
         }
 
-        if (WEXITSTATUS(status) == 2 && ngx_processes[i].respawn) {
+        if (WEXITSTATUS(status) == 2 && ngx_processes[i].respawn)
+        {
             ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
                           "%s %P exited with fatal code %d "
                           "and cannot be respawned",
@@ -560,22 +590,21 @@ ngx_process_get_status(void)
     }
 }
 
-
-static void
-ngx_unlock_mutexes(ngx_pid_t pid)
+static void ngx_unlock_mutexes(ngx_pid_t pid)
 {
-    ngx_uint_t        i;
-    ngx_shm_zone_t   *shm_zone;
-    ngx_list_part_t  *part;
-    ngx_slab_pool_t  *sp;
+    ngx_uint_t i;
+    ngx_shm_zone_t *shm_zone;
+    ngx_list_part_t *part;
+    ngx_slab_pool_t *sp;
 
     /*
      * unlock the accept mutex if the abnormally exited process
      * held it
      */
 
-    if (ngx_accept_mutex_ptr) {
-        (void) ngx_shmtx_force_unlock(&ngx_accept_mutex, pid);
+    if (ngx_accept_mutex_ptr)
+    {
+        (void)ngx_shmtx_force_unlock(&ngx_accept_mutex, pid);
     }
 
     /*
@@ -583,13 +612,16 @@ ngx_unlock_mutexes(ngx_pid_t pid)
      * process
      */
 
-    part = (ngx_list_part_t *) &ngx_cycle->shared_memory.part;
+    part = (ngx_list_part_t *)&ngx_cycle->shared_memory.part;
     shm_zone = part->elts;
 
-    for (i = 0; /* void */ ; i++) {
+    for (i = 0; /* void */; i++)
+    {
 
-        if (i >= part->nelts) {
-            if (part->next == NULL) {
+        if (i >= part->nelts)
+        {
+            if (part->next == NULL)
+            {
                 break;
             }
             part = part->next;
@@ -597,9 +629,10 @@ ngx_unlock_mutexes(ngx_pid_t pid)
             i = 0;
         }
 
-        sp = (ngx_slab_pool_t *) shm_zone[i].shm.addr;
+        sp = (ngx_slab_pool_t *)shm_zone[i].shm.addr;
 
-        if (ngx_shmtx_force_unlock(&sp->mutex, pid)) {
+        if (ngx_shmtx_force_unlock(&sp->mutex, pid))
+        {
             ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
                           "shared memory zone \"%V\" was locked by %P",
                           &shm_zone[i].shm.name, pid);
@@ -607,16 +640,15 @@ ngx_unlock_mutexes(ngx_pid_t pid)
     }
 }
 
-
-void
-ngx_debug_point(void)
+void ngx_debug_point(void)
 {
-    ngx_core_conf_t  *ccf;
+    ngx_core_conf_t *ccf;
 
-    ccf = (ngx_core_conf_t *) ngx_get_conf(ngx_cycle->conf_ctx,
-                                           ngx_core_module);
+    ccf = (ngx_core_conf_t *)ngx_get_conf(ngx_cycle->conf_ctx,
+                                          ngx_core_module);
 
-    switch (ccf->debug_points) {
+    switch (ccf->debug_points)
+    {
 
     case NGX_DEBUG_POINTS_STOP:
         raise(SIGSTOP);
@@ -627,15 +659,24 @@ ngx_debug_point(void)
     }
 }
 
-
-ngx_int_t
-ngx_os_signal_process(ngx_cycle_t *cycle, char *name, ngx_pid_t pid)
+/**
+ * @description: 根据信号名称和进程ID,执行相应操作
+ * @param {ngx_cycle_t} *cycle Nginx全局变量
+ * @param {char} *name 信号名称
+ * @param {ngx_pid_t} pid 进程ID
+ * @return {*} 0:执行成功, 1:信号未注册，执行操作失败
+ */
+ngx_int_t ngx_os_signal_process(ngx_cycle_t *cycle, char *name, ngx_pid_t pid)
 {
-    ngx_signal_t  *sig;
+    ngx_signal_t *sig;
 
-    for (sig = signals; sig->signo != 0; sig++) {
-        if (ngx_strcmp(name, sig->name) == 0) {
-            if (kill(pid, sig->signo) != -1) {
+    for (sig = signals; sig->signo != 0; sig++)
+    {
+        if (ngx_strcmp(name, sig->name) == 0)
+        {
+            // 通过系统调用向该进程发送信号
+            if (kill(pid, sig->signo) != -1)
+            {
                 return 0;
             }
 

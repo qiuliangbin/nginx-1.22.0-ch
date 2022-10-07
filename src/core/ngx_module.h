@@ -220,30 +220,32 @@
 
 
 struct ngx_module_s {
-    ngx_uint_t            ctx_index;
-    ngx_uint_t            index;
+    ngx_uint_t            ctx_index; //同一类型模块的顺序编号
+    ngx_uint_t            index;//模块的唯一标识编号，用于识别不同的模块
 
-    char                 *name;
+    char                 *name;//模块名称
 
     ngx_uint_t            spare0;
     ngx_uint_t            spare1;
 
-    ngx_uint_t            version;
+    ngx_uint_t            version;//模块版本
     const char           *signature;
 
-    void                 *ctx;
-    ngx_command_t        *commands;
-    ngx_uint_t            type;
-
+    void                 *ctx;//模块上下文，用于放置一个模块自定义的结构
+    ngx_command_t        *commands;//模块支持的命令集
+    ngx_uint_t            type;// 模块类型
+    // 初始化主进程调用
     ngx_int_t           (*init_master)(ngx_log_t *log);
-
+    // 初始化模块时调用
     ngx_int_t           (*init_module)(ngx_cycle_t *cycle);
-
+    // 初始化工作进程时调用
     ngx_int_t           (*init_process)(ngx_cycle_t *cycle);
+    // 初始化线程时调用
     ngx_int_t           (*init_thread)(ngx_cycle_t *cycle);
     void                (*exit_thread)(ngx_cycle_t *cycle);
+    // 退出工作进程时调用
     void                (*exit_process)(ngx_cycle_t *cycle);
-
+    // 退出主进程时调用
     void                (*exit_master)(ngx_cycle_t *cycle);
 
     uintptr_t             spare_hook0;
@@ -273,7 +275,7 @@ ngx_int_t ngx_count_modules(ngx_cycle_t *cycle, ngx_uint_t type);
 ngx_int_t ngx_add_module(ngx_conf_t *cf, ngx_str_t *file,
     ngx_module_t *module, char **order);
 
-
+// 模块数组，所有的模块都会保存在此数组中   共有四种类型模块："CORE","CONF","EVNT","HTTP"
 extern ngx_module_t  *ngx_modules[];
 extern ngx_uint_t     ngx_max_module;
 

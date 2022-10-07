@@ -37,14 +37,14 @@ typedef struct {
 
 
 #define NGX_HTTP_MODULE           0x50545448   /* "HTTP" */
-
-#define NGX_HTTP_MAIN_CONF        0x02000000
-#define NGX_HTTP_SRV_CONF         0x04000000
-#define NGX_HTTP_LOC_CONF         0x08000000
-#define NGX_HTTP_UPS_CONF         0x10000000
-#define NGX_HTTP_SIF_CONF         0x20000000
-#define NGX_HTTP_LIF_CONF         0x40000000
-#define NGX_HTTP_LMT_CONF         0x80000000
+// 指定配置指令出现位置的宏
+#define NGX_HTTP_MAIN_CONF        0x02000000 // 配置指令只能出现在http-server主配置级别
+#define NGX_HTTP_SRV_CONF         0x04000000 // 配置指令只能出现在http-server的虚拟主机配置级别
+#define NGX_HTTP_LOC_CONF         0x08000000 // 配置指令只能出现在http-server的location配置级别
+#define NGX_HTTP_UPS_CONF         0x10000000 // 配置指令只能出现在http-server的if()块中
+#define NGX_HTTP_SIF_CONF         0x20000000 // 配置指令只能出现在http-server的if()块中
+#define NGX_HTTP_LIF_CONF         0x40000000 // 配置指令只能出现在http的upstream块中
+#define NGX_HTTP_LMT_CONF         0x80000000 // 配置指令只能出现在limit_except块中
 
 
 #define NGX_HTTP_MAIN_CONF_OFFSET  offsetof(ngx_http_conf_ctx_t, main_conf)

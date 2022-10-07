@@ -153,9 +153,13 @@ ngx_conf_add_dump(ngx_conf_t *cf, ngx_str_t *filename)
     return NGX_OK;
 }
 
-
-char *
-ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
+/**
+ * @description: 解析配置信息核心函数； 包含：解析命令中的配置信息和文件中的配置信息
+ * @param {ngx_conf_t} *cf
+ * @param {ngx_str_t} *filename
+ * @return {*}
+ */
+char *ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
 {
     char             *rv;
     ngx_fd_t          fd;
@@ -189,7 +193,7 @@ ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
         prev = cf->conf_file;
 
         cf->conf_file = &conf_file;
-
+        // 读取文件信息
         if (ngx_fd_info(fd, &cf->conf_file->file.info) == NGX_FILE_ERROR) {
             ngx_log_error(NGX_LOG_EMERG, cf->log, ngx_errno,
                           ngx_fd_info_n " \"%s\" failed", filename->data);
@@ -206,13 +210,13 @@ ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
         buf.last = buf.start;
         buf.end = buf.last + NGX_CONF_BUFFER;
         buf.temporary = 1;
-
-        cf->conf_file->file.fd = fd;
-        cf->conf_file->file.name.len = filename->len;
-        cf->conf_file->file.name.data = filename->data;
-        cf->conf_file->file.offset = 0;
-        cf->conf_file->file.log = cf->log;
-        cf->conf_file->line = 1;
+        /* 读取配置文件数据，保存到cf->conf_file中 */
+        cf->conf_file->file.fd = fd; // 文件句柄
+        cf->conf_file->file.name.len = filename->len; // 文件名长度
+        cf->conf_file->file.name.data = filename->data; // 文件名称
+        cf->conf_file->file.offset = 0; // 文件读指针偏移
+        cf->conf_file->file.log = cf->log; // 日志
+        cf->conf_file->line = 1; // 读取第几行
 
         type = parse_file;
 
@@ -240,6 +244,7 @@ ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
 
 
     for ( ;; ) {
+        // 按行读取配置文件，并将命令解析成token数组cf->args
         rc = ngx_conf_read_token(cf);
 
         /*
@@ -498,9 +503,52 @@ invalid:
     return NGX_ERROR;
 }
 
-
-static ngx_int_t
-ngx_conf_read_token(ngx_conf_t *cf)
+/**
+ * @description: 将配置文件分解成逐个的单词数组。例如配置文件中遇到"空格"则为分隔符，";"为结束符
+ * 每一个数组，就是一条配置命令语句。数组会放置到cf->args数组上。
+ * 
+ * 读取配置信息
+ * 把每次分析的值放到cf->args这个数组里面	碰到{} ; 返回
+ * nginx.conf配置文件如下：
+ * ----------------------------------------------------------------------------------
+    user  nfsnobody nfsnobody;
+    worker_processes 8;
+    error_log  /usr/local/nginx-1.4.7/nginx_error.log  crit;
+    pid        /usr/local/nginx-1.4.7/nginx.pid;
+    #Specifies the value for maximum file descriptors that can be opened by this process.
+    worker_rlimit_nofile 65535;
+    events
+    {
+        use epoll;
+        worker_connections 65535;
+    }
+    ----------------------------------------------------------------------------------
+    解析成下面的格式：
+    ----------------------------------------------------------------------------------
+    #分解成逐个单词数组：
+    user
+    nfsnobody
+    nfsnobody
+    
+    worker_processes
+    8
+    
+    error_log
+    /usr/local/nginx-1.4.7/nginx_error.log
+    crit
+    
+    pid
+    /usr/local/nginx-1.4.7/nginx.pid
+    
+    worker_rlimit_nofile
+    65535
+    
+    events
+    ----------------------------------------------------------------------------------
+ * @param {ngx_conf_t} *cf
+ * @return {*}
+ */
+static ngx_int_t ngx_conf_read_token(ngx_conf_t *cf)
 {
     u_char      *start, ch, *src, *dst;
     off_t        file_size;
@@ -511,29 +559,29 @@ ngx_conf_read_token(ngx_conf_t *cf)
     ngx_str_t   *word;
     ngx_buf_t   *b, *dump;
 
-    found = 0;
+    found = 0; //  表示找到一个 token
     need_space = 0;
-    last_space = 1;
-    sharp_comment = 0;
-    variable = 0;
-    quoted = 0;
-    s_quoted = 0;
-    d_quoted = 0;
+    last_space = 1; // 标志位,表示上一个字符为token分隔符
+    sharp_comment = 0; // 注释 #符号
+    variable = 0; // 变量符号 $
+    quoted = 0; // 标志位,表示上一个字符为反斜杠
+    s_quoted = 0; // 标志位,表示已扫描一个单引号,期待另一个单引号
+    d_quoted = 0; // 标志位,表示已扫描一个双引号,期待另一个双引号
 
     cf->args->nelts = 0;
-    b = cf->conf_file->buffer;
+    b = cf->conf_file->buffer; //buffer 每次4096
     dump = cf->conf_file->dump;
-    start = b->pos;
-    start_line = cf->conf_file->line;
+    start = b->pos; // start指向缓冲区起始地址, 也就是指向当前要解析的token的起始字符
+    start_line = cf->conf_file->line;// 行号
 
-    file_size = ngx_file_size(&cf->conf_file->file.info);
+    file_size = ngx_file_size(&cf->conf_file->file.info);//获取配置文件大小
 
     for ( ;; ) {
-
+        /* buf中的数据已经处理完毕，则需要判断是否文件读取完了，如果没有读取完，则继续解析配置文件 */
         if (b->pos >= b->last) {
-
+            
             if (cf->conf_file->file.offset >= file_size) {
-
+                //文件已处理完. 但是已解析出的token数大于0或者已发现一个token的起始位置. 配置行不完整. 配置语法出错。
                 if (cf->args->nelts > 0 || !last_space) {
 
                     if (cf->conf_file->file.fd == NGX_INVALID_FILE) {
@@ -548,19 +596,22 @@ ngx_conf_read_token(ngx_conf_t *cf)
                                   "expecting \";\" or \"}\"");
                     return NGX_ERROR;
                 }
-
+                // 处理完配置文件.
                 return NGX_CONF_FILE_DONE;
             }
-
+            // 未处理的缓冲区字符长度.
             len = b->pos - start;
-
+            /* 
+                如果len=4096 则表明buf全部读取满了；
+                如果读取了4096个字符，还是没有发现"和'的标示符号，则认为读取失败，参数太长了 
+            */
             if (len == NGX_CONF_BUFFER) {
                 cf->conf_file->line = start_line;
 
-                if (d_quoted) {
+                if (d_quoted) { // 必须["]结尾
                     ch = '"';
 
-                } else if (s_quoted) {
+                } else if (s_quoted) { // 必须[']结尾
                     ch = '\'';
 
                 } else {
@@ -575,17 +626,17 @@ ngx_conf_read_token(ngx_conf_t *cf)
                                    "missing terminating \"%c\" character", ch);
                 return NGX_ERROR;
             }
-
+            //将未处理完的字符拷贝到缓冲区开始处. 这些字符是一个token的一部分
             if (len) {
                 ngx_memmove(b->start, start, len);
             }
-
+            // 配置文件未处理的长度.
             size = (ssize_t) (file_size - cf->conf_file->file.offset);
-
+            // 若超过可用缓冲区长度则一次读取可用缓冲区长度的字符.
             if (size > b->end - (b->start + len)) {
                 size = b->end - (b->start + len);
             }
-
+            // 从上次读取结束的地方开始读取size个字符继续处理.
             n = ngx_read_file(&cf->conf_file->file, b->start + len, size,
                               cf->conf_file->file.offset);
 
@@ -600,7 +651,7 @@ ngx_conf_read_token(ngx_conf_t *cf)
                                    n, size);
                 return NGX_ERROR;
             }
-
+            // [b->pos, b->last) 之间是需要处理的字符.
             b->pos = b->start + len;
             b->last = b->pos + n;
             start = b->start;
@@ -611,7 +662,7 @@ ngx_conf_read_token(ngx_conf_t *cf)
         }
 
         ch = *b->pos++;
-
+        //当前字符是换行符. 行计数器增1, 若之前扫描到该行首是注释符, 则注释标识清0
         if (ch == LF) {
             cf->conf_file->line++;
 
@@ -619,27 +670,27 @@ ngx_conf_read_token(ngx_conf_t *cf)
                 sharp_comment = 0;
             }
         }
-
+        //当前行是注释行, 吃掉该行后续所有字符.
         if (sharp_comment) {
             continue;
         }
-
+        //跳过\后面的字符. 即转义序列.
         if (quoted) {
             quoted = 0;
             continue;
         }
-
+        //当token被单或双引号包围是need_space会被置1.
         if (need_space) {
             if (ch == ' ' || ch == '\t' || ch == CR || ch == LF) {
                 last_space = 1;
                 need_space = 0;
                 continue;
-            }
-
+            }   
+            //配置行以分号结尾.
             if (ch == ';') {
                 return NGX_OK;
             }
-
+            //配置块以{开始
             if (ch == '{') {
                 return NGX_CONF_BLOCK_START;
             }
@@ -654,32 +705,31 @@ ngx_conf_read_token(ngx_conf_t *cf)
                 return NGX_ERROR;
             }
         }
-
+        //last_space为1表明未发现token起始位置, 吃掉所有空白字符.
         if (last_space) {
-
             start = b->pos - 1;
             start_line = cf->conf_file->line;
-
             if (ch == ' ' || ch == '\t' || ch == CR || ch == LF) {
                 continue;
             }
-
+            //非空白字符是一个token的起始位置.
             switch (ch) {
 
             case ';':
             case '{':
+                //在分号和左括号之前必定会出现至少一个token. 否则是配置语法错误
                 if (cf->args->nelts == 0) {
                     ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                                        "unexpected \"%c\"", ch);
                     return NGX_ERROR;
                 }
-
+                //配置块起始位置.
                 if (ch == '{') {
                     return NGX_CONF_BLOCK_START;
                 }
-
+                //配置行结束.
                 return NGX_OK;
-
+            //配置块结束标识右括号独占一行.
             case '}':
                 if (cf->args->nelts != 0) {
                     ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
@@ -688,16 +738,16 @@ ngx_conf_read_token(ngx_conf_t *cf)
                 }
 
                 return NGX_CONF_BLOCK_DONE;
-
+            //注释符.
             case '#':
                 sharp_comment = 1;
                 continue;
-
+            //转义序列.其后面的一个字符将被跳过.
             case '\\':
                 quoted = 1;
                 last_space = 0;
                 continue;
-
+            //引号开头的token.
             case '"':
                 start++;
                 d_quoted = 1;
@@ -718,14 +768,14 @@ ngx_conf_read_token(ngx_conf_t *cf)
             default:
                 last_space = 0;
             }
-
+            //到这里开始处理token字符
         } else {
             if (ch == '{' && variable) {
                 continue;
             }
 
             variable = 0;
-
+            //转义序列.其后面的一个字符将被跳过
             if (ch == '\\') {
                 quoted = 1;
                 continue;
@@ -735,7 +785,7 @@ ngx_conf_read_token(ngx_conf_t *cf)
                 variable = 1;
                 continue;
             }
-
+            // 单双引号包围的字符是一个token.
             if (d_quoted) {
                 if (ch == '"') {
                     d_quoted = 0;
@@ -751,13 +801,14 @@ ngx_conf_read_token(ngx_conf_t *cf)
                 }
 
             } else if (ch == ' ' || ch == '\t' || ch == CR || ch == LF
-                       || ch == ';' || ch == '{')
+                       || ch == ';' || ch == '{') //字符是空格、制表符、换行符、分号或是左花括号表示一个token的结束.也即发现一个token
             {
                 last_space = 1;
                 found = 1;
             }
 
             if (found) {
+                //将该token放入cf->args动态数组中.
                 word = ngx_array_push(cf->args);
                 if (word == NULL) {
                     return NGX_ERROR;
@@ -767,7 +818,7 @@ ngx_conf_read_token(ngx_conf_t *cf)
                 if (word->data == NULL) {
                     return NGX_ERROR;
                 }
-
+                //将token中的转义序列转义后复制给word->data, 其他的按原样复制.
                 for (dst = word->data, src = start, len = 0;
                      src < b->pos - 1;
                      len++)
@@ -801,15 +852,15 @@ ngx_conf_read_token(ngx_conf_t *cf)
                 }
                 *dst = '\0';
                 word->len = len;
-
+                //若token以分号结束则处理完一个配置行.
                 if (ch == ';') {
                     return NGX_OK;
                 }
-
+                //若token以左花括号结束则发现配置块起始位置.
                 if (ch == '{') {
                     return NGX_CONF_BLOCK_START;
                 }
-
+                //发现token标识清0
                 found = 0;
             }
         }
