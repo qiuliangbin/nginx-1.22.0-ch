@@ -76,9 +76,14 @@ ngx_time_init(void)
     ngx_time_update();
 }
 
-
-void
-ngx_time_update(void)
+/**
+ * @description: 缓存时间的更新
+ * 1）时间数据的一致性主要是体现在读写上，首先要防止写冲突，对写时间缓存加锁，因为读时间操作频率远大于写时间，所以读操作没有加锁
+ * 2）还有另外一种是，在读的时候，另外有个信号中断了读操作，而这个信号里面更新了时间缓存变量导致读的时间不一致，
+ * nginx通过时间数组变量来解决这个问题
+ * @return {*}
+ */
+void ngx_time_update(void)
 {
     u_char          *p0, *p1, *p2, *p3, *p4;
     ngx_tm_t         tm, gmt;
@@ -86,40 +91,40 @@ ngx_time_update(void)
     ngx_uint_t       msec;
     ngx_time_t      *tp;
     struct timeval   tv;
-
+    // 上锁
     if (!ngx_trylock(&ngx_time_lock)) {
         return;
     }
-
+    // 获取当前距离1970年的秒数和微妙数
     ngx_gettimeofday(&tv);
 
-    sec = tv.tv_sec;
-    msec = tv.tv_usec / 1000;
-
+    sec = tv.tv_sec; // 当前距离1970年的秒数
+    msec = tv.tv_usec / 1000; // 当前距离1970年的微妙数
+    // 将时间单位统一换成毫秒级别
     ngx_current_msec = ngx_monotonic_time(sec, msec);
 
     tp = &cached_time[slot];
-
+    // 与最后一次更新后的时间一致, 则表明无须任何更新时间，解锁
     if (tp->sec == sec) {
         tp->msec = msec;
         ngx_unlock(&ngx_time_lock);
         return;
     }
-
+    // 获取待当前缓存操作的slot
     if (slot == NGX_TIME_SLOTS - 1) {
         slot = 0;
     } else {
         slot++;
     }
-
+    // tp重置为当前时间
     tp = &cached_time[slot];
 
     tp->sec = sec;
     tp->msec = msec;
-
+    // 将time_t表示的时间sec转换为UTC时间，是一个struct tm结构指针
     ngx_gmtime(sec, &gmt);
 
-
+    // 将时间转换为“年-月-日-星期-时-分-秒”的格式
     p0 = &cached_http_time[slot][0];
 
     (void) ngx_sprintf(p0, "%s, %02d %s %4d %02d:%02d:%02d GMT",
@@ -146,7 +151,7 @@ ngx_time_update(void)
 
 #endif
 
-
+    // 更新错误日志缓存时间
     p1 = &cached_err_log_time[slot][0];
 
     (void) ngx_sprintf(p1, "%4d/%02d/%02d %02d:%02d:%02d",
@@ -154,7 +159,7 @@ ngx_time_update(void)
                        tm.ngx_tm_mday, tm.ngx_tm_hour,
                        tm.ngx_tm_min, tm.ngx_tm_sec);
 
-
+    // 更新http日志缓存时间
     p2 = &cached_http_log_time[slot][0];
 
     (void) ngx_sprintf(p2, "%02d/%s/%d:%02d:%02d:%02d %c%02i%02i",
@@ -172,13 +177,13 @@ ngx_time_update(void)
                        tm.ngx_tm_min, tm.ngx_tm_sec,
                        tp->gmtoff < 0 ? '-' : '+',
                        ngx_abs(tp->gmtoff / 60), ngx_abs(tp->gmtoff % 60));
-
+    // 更新系统日志缓存时间
     p4 = &cached_syslog_time[slot][0];
 
     (void) ngx_sprintf(p4, "%s %2d %02d:%02d:%02d",
                        months[tm.ngx_tm_mon - 1], tm.ngx_tm_mday,
                        tm.ngx_tm_hour, tm.ngx_tm_min, tm.ngx_tm_sec);
-
+    // 兼容了各种平台的宏定义函数，volatile关键字就知道主要告诉编译器不要对后面的语句进行优化了，
     ngx_memory_barrier();
 
     ngx_cached_time = tp;

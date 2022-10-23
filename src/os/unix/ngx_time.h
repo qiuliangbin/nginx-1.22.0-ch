@@ -1,4 +1,3 @@
-
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
@@ -57,7 +56,7 @@ void ngx_timezone_update(void);
 void ngx_localtime(time_t s, ngx_tm_t *tm);
 void ngx_libc_localtime(time_t s, struct tm *tm);
 void ngx_libc_gmtime(time_t s, struct tm *tm);
-
+// int gettimeofday(struct timeval *tv, struct timezone *tz); 返回当前距离1970年的秒数和微妙数，后面的tz是时区，一般不用；
 #define ngx_gettimeofday(tp)  (void) gettimeofday(tp, NULL);
 #define ngx_msleep(ms)        (void) usleep(ms * 1000)
 #define ngx_sleep(s)          (void) sleep(s)

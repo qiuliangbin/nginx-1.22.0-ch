@@ -70,8 +70,10 @@ static ngx_log_t        ngx_exit_log;
 static ngx_open_file_t  ngx_exit_log_file;
 
 
-void
-ngx_master_process_cycle(ngx_cycle_t *cycle)
+/**
+ * Nginx的多进程运行模式
+ */
+void ngx_master_process_cycle(ngx_cycle_t *cycle)
 {
     char              *title;
     u_char            *p;
@@ -83,7 +85,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
     ngx_uint_t         live;
     ngx_msec_t         delay;
     ngx_core_conf_t   *ccf;
-
+    // 设置能接收到的信号
     sigemptyset(&set);
     sigaddset(&set, SIGCHLD);
     sigaddset(&set, SIGALRM);
@@ -95,12 +97,12 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
     sigaddset(&set, ngx_signal_value(NGX_TERMINATE_SIGNAL));
     sigaddset(&set, ngx_signal_value(NGX_SHUTDOWN_SIGNAL));
     sigaddset(&set, ngx_signal_value(NGX_CHANGEBIN_SIGNAL));
-
+    // 设置信号处理掩码
     if (sigprocmask(SIG_BLOCK, &set, NULL) == -1) {
         ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                       "sigprocmask() failed");
     }
-
+    // 清空set信号集里面的所有信号
     sigemptyset(&set);
 
 
@@ -110,6 +112,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
         size += ngx_strlen(ngx_argv[i]) + 1;
     }
 
+    // 保存进程标题
     title = ngx_pnalloc(cycle->pool, size);
     if (title == NULL) {
         /* fatal */
@@ -124,9 +127,9 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
 
     ngx_setproctitle(title);
 
-
+    //  获取核心配置 ngx_core_conf_t
     ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx, ngx_core_module);
-
+    // 启动工作进程 - 多进程启动的核心函数
     ngx_start_worker_processes(cycle, ccf->worker_processes,
                                NGX_PROCESS_RESPAWN);
     ngx_start_cache_manager_processes(cycle, 0);
@@ -135,8 +138,9 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
     delay = 0;
     sigio = 0;
     live = 1;
-
+    // 主线程循环
     for ( ;; ) {
+        // delay用来设置等待worker退出的时间,master接收了退出信号后,首先发送退出信号给worker，而worker退出需要一些时间
         if (delay) {
             if (ngx_sigalrm) {
                 sigio = 0;
@@ -159,14 +163,14 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
         }
 
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0, "sigsuspend");
-
+        // 用于在接收到某个信号之前, 临时用mask替换进程的信号掩码, 并暂停进程执行，直到收到信号为止
         sigsuspend(&set);
-
+        // 更新ngx缓存时间
         ngx_time_update();
 
         ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                        "wake up, sigio %i", sigio);
-
+        // 收到SIGCHLD信号,有worker进程退出
         if (ngx_reap) {
             ngx_reap = 0;
             ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0, "reap children");
@@ -177,7 +181,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
         if (!live && (ngx_terminate || ngx_quit)) {
             ngx_master_process_exit(cycle);
         }
-
+        // 接收到SIGINT信号，中止进程
         if (ngx_terminate) {
             if (delay == 0) {
                 delay = 50;
@@ -199,7 +203,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
 
             continue;
         }
-
+        // 接收QUIT信号, 立即退出程序
         if (ngx_quit) {
             ngx_signal_worker_processes(cycle,
                                         ngx_signal_value(NGX_SHUTDOWN_SIGNAL));
@@ -207,7 +211,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
 
             continue;
         }
-
+        // 收到SIGHUP信号 重新初始化配置
         if (ngx_reconfigure) {
             ngx_reconfigure = 0;
 
@@ -242,7 +246,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
             ngx_signal_worker_processes(cycle,
                                         ngx_signal_value(NGX_SHUTDOWN_SIGNAL));
         }
-
+        // 当nginx二进制可执行文件变更后，新的二进制文件会接收到重启信号
         if (ngx_restart) {
             ngx_restart = 0;
             ngx_start_worker_processes(cycle, ccf->worker_processes,
@@ -250,7 +254,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
             ngx_start_cache_manager_processes(cycle, 0);
             live = 1;
         }
-
+        // 接收到USR1信号，用于切割日志
         if (ngx_reopen) {
             ngx_reopen = 0;
             ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "reopening logs");
@@ -258,13 +262,14 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
             ngx_signal_worker_processes(cycle,
                                         ngx_signal_value(NGX_REOPEN_SIGNAL));
         }
-
+        // 接收到USR2信号, nginx二进制可执行文件更改，实现灰度发布
         if (ngx_change_binary) {
             ngx_change_binary = 0;
             ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "changing binary");
             ngx_new_binary = ngx_exec_new_binary(cycle, ngx_argv);
         }
 
+        // 接收到WINCH信号，停止接收连接请求
         if (ngx_noaccept) {
             ngx_noaccept = 0;
             ngx_noaccepting = 1;
