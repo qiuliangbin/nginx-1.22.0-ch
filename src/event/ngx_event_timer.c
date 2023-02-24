@@ -49,7 +49,12 @@ ngx_event_find_timer(void)
     return (ngx_msec_t) (timer > 0 ? timer : 0);
 }
 
-
+/**
+  * @brief   从ngx_event_timer_rbtree（定时器的红黑树中取出所有超时的定时器时间，并使用设定的handler处理该事件）
+  * @note    https://blog.csdn.net/ai2000ai/article/details/82886874
+  * @param   None
+  * @retval  None
+  **/
 void
 ngx_event_expire_timers(void)
 {

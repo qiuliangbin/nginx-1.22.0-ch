@@ -12,7 +12,7 @@
 
 static ngx_int_t ngx_disable_accept_events(ngx_cycle_t *cycle, ngx_uint_t all);
 #if (NGX_HAVE_EPOLLEXCLUSIVE)
-static void ngx_reorder_accept_events(ngx_listening_t *ls);
+2static void ngx_reorder_accept_events(ngx_listening_t *ls);
 #endif
 static void ngx_close_accepted_connection(ngx_connection_t *c);
 
@@ -323,11 +323,16 @@ ngx_event_accept(ngx_event_t *ev)
 #endif
 }
 
-
+/**
+  * @brief   尝试获取accept锁(乐观锁)
+  * @note    ngx_accept_mutex_held: 拿到accept锁的唯一标识的全局变量
+  * @param   cycle: 全局上下文
+  * @retval  NGX_OK: 获取accept锁成功, NGX_ERROR: 获取accept锁失败
+  **/
 ngx_int_t
 ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
 {
-    if (ngx_shmtx_trylock(&ngx_accept_mutex)) {
+    if (ngx_shmtx_trylock(&ngx_accept_mutex)) { // 尝试获取accept锁
 
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                        "accept mutex locked");
