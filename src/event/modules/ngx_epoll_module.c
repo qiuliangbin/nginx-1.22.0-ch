@@ -779,7 +779,12 @@ ngx_epoll_notify(ngx_event_handler_pt handler)
 
 #endif
 
-
+/**
+  * @brief   对ngx_posted_accept_events或ngx_posted_events队列上的accept/read事件进行回调处理
+  * @note    事件分发; 惊群处理; 简单的负载均衡
+  * @param   cycle
+  * @retval  None
+  **/
 static ngx_int_t
 ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
 {
@@ -796,7 +801,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                    "epoll timer: %M", timer);
-
+    // 等待epoll文件描述符上关注的I/O事件(包括accept和read/write事件)
     events = epoll_wait(ep, event_list, (int) nevents, timer);
 
     err = (events == -1) ? ngx_errno : 0;
@@ -853,7 +858,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
             continue;
         }
 
-        revents = event_list[i].events;
+        revents = event_list[i].events; // epoll就绪事件列表
 
         ngx_log_debug3(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                        "epoll: fd:%d ev:%04XD d:%p",
@@ -880,7 +885,7 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
         }
 #endif
 
-        if ((revents & EPOLLIN) && rev->active) {
+        if ((revents & EPOLLIN) && rev->active) { // 读取事件, EPOLLIN
 
 #if (NGX_HAVE_EPOLLRDHUP)
             if (revents & EPOLLRDHUP) {
@@ -891,20 +896,20 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
             rev->ready = 1;
             rev->available = -1;
 
-            if (flags & NGX_POST_EVENTS) {
+            if (flags & NGX_POST_EVENTS) { // 如果子进程抢到锁, 则放入事件队列
                 queue = rev->accept ? &ngx_posted_accept_events
                                     : &ngx_posted_events;
 
                 ngx_post_event(rev, queue);
 
             } else {
-                rev->handler(rev);
+                rev->handler(rev); // 子进程没有抢到锁, 则直接处理write事件
             }
         }
 
         wev = c->write;
 
-        if ((revents & EPOLLOUT) && wev->active) {
+        if ((revents & EPOLLOUT) && wev->active) { // 写入事件, EPOLLOUT
 
             if (c->fd == -1 || wev->instance != instance) {
 
@@ -923,11 +928,11 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
             wev->complete = 1;
 #endif
 
-            if (flags & NGX_POST_EVENTS) {
+            if (flags & NGX_POST_EVENTS) { // 如果子进程抢到锁, 则放入事件队列
                 ngx_post_event(wev, &ngx_posted_events);
 
             } else {
-                wev->handler(wev);
+                wev->handler(wev); // 子进程没有抢到锁, 则直接处理read事件
             }
         }
     }

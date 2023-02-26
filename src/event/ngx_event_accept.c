@@ -324,7 +324,7 @@ ngx_event_accept(ngx_event_t *ev)
 }
 
 /**
-  * @brief   尝试获取accept锁(乐观锁)
+  * @brief   通过锁竞争，获得获取资源的权限(自旋锁)
   * @note    ngx_accept_mutex_held: 拿到accept锁的唯一标识的全局变量
   * @param   cycle: 全局上下文
   * @retval  NGX_OK: 获取accept锁成功, NGX_ERROR: 获取accept锁失败
@@ -336,37 +336,42 @@ ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
 
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                        "accept mutex locked");
-
+        // 多次进来，判断是否已经拿到锁
         if (ngx_accept_mutex_held && ngx_accept_events == 0) {
             return NGX_OK;
         }
-
+        // 将 listen socket 添加到 epoll 事件驱动里, 开启监听accept事件
         if (ngx_enable_accept_events(cycle) == NGX_ERROR) {
             ngx_shmtx_unlock(&ngx_accept_mutex);
             return NGX_ERROR;
         }
 
         ngx_accept_events = 0;
-        ngx_accept_mutex_held = 1;
+        ngx_accept_mutex_held = 1; // 修改持锁的状态
 
         return NGX_OK;
     }
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                    "accept mutex lock failed: %ui", ngx_accept_mutex_held);
-
+    // 获取accept_mutex锁失败，如果之前是曾经成功获取锁的，不能再获取资源了，将 listen socket 从 epoll 里删除
     if (ngx_accept_mutex_held) {
         if (ngx_disable_accept_events(cycle, 0) == NGX_ERROR) {
             return NGX_ERROR;
         }
-
+        // 改变持锁的状态
         ngx_accept_mutex_held = 0;
     }
 
     return NGX_OK;
 }
 
-
+/**
+  * @brief   子进程 epoll_ctl 关注 listen socket 事件， 开启accept事件监听
+  * @note
+  * @param   cycle: 全局上下文
+  * @retval  NGX_OK: 子进程epoll_ctl增加对listen socket事件关注操作成功, NGX_ERROR: 失败
+  **/
 ngx_int_t
 ngx_enable_accept_events(ngx_cycle_t *cycle)
 {
@@ -378,11 +383,11 @@ ngx_enable_accept_events(ngx_cycle_t *cycle)
     for (i = 0; i < cycle->listening.nelts; i++) {
 
         c = ls[i].connection;
-
+        // 如果c->read->active为真，则表示活跃的连接，已经被使用中
         if (c == NULL || c->read->active) {
             continue;
         }
-
+        // 将共享的 listen socket 通过epoll_ctl添加到子进程的epoll中, 当该socket有新的链接进来,epoll_wait会通知处理
         if (ngx_add_event(c->read, NGX_READ_EVENT, 0) == NGX_ERROR) {
             return NGX_ERROR;
         }
@@ -391,7 +396,12 @@ ngx_enable_accept_events(ngx_cycle_t *cycle)
     return NGX_OK;
 }
 
-
+/**
+  * @brief   子进程 epoll_ctl 取消关注 listen socket 事件， 关闭accept事件监听
+  * @note
+  * @param   cycle: 全局上下文
+  * @retval  NGX_OK: 子进程epoll_ctl取消对listen socket事件关注操作成功, NGX_ERROR: 失败
+  **/
 static ngx_int_t
 ngx_disable_accept_events(ngx_cycle_t *cycle, ngx_uint_t all)
 {
@@ -403,7 +413,7 @@ ngx_disable_accept_events(ngx_cycle_t *cycle, ngx_uint_t all)
     for (i = 0; i < cycle->listening.nelts; i++) {
 
         c = ls[i].connection;
-
+        // 如果c->read->active == false，则表示已关闭的连接(不需要重复【将共享的 listen socket 从 epoll 中删除】这个操作)
         if (c == NULL || !c->read->active) {
             continue;
         }
@@ -420,7 +430,7 @@ ngx_disable_accept_events(ngx_cycle_t *cycle, ngx_uint_t all)
         }
 
 #endif
-
+        // 子进程将共享的 listen socket 从 epoll 中删除，不再关注它的事件
         if (ngx_del_event(c->read, NGX_READ_EVENT, NGX_DISABLE_EVENT)
             == NGX_ERROR)
         {

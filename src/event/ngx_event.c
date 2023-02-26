@@ -244,7 +244,7 @@ ngx_process_events_and_timers(ngx_cycle_t *cycle) {
          * 只处理当前连接的read事件, 这是比较简单的一种负载均衡方法
          */
         if (ngx_accept_disabled > 0) { // 超过负载均衡的阈值,不再accept新的客户端连接请求
-            ngx_accept_disabled--;
+            ngx_accept_disabled--;// 不抢; 为了避免一致不抢,也要递减它的disable程度
 
         } else { // 还可以accept客户端的连接请求
             // 获取锁失败

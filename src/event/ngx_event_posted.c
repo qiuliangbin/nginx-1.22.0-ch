@@ -14,7 +14,12 @@ ngx_queue_t  ngx_posted_accept_events;
 ngx_queue_t  ngx_posted_next_events;
 ngx_queue_t  ngx_posted_events;
 
-
+/**
+  * @brief   对ngx_posted_accept_events或ngx_posted_events队列上的accept/read事件进行回调处理
+  * @note    事件分发; 惊群处理; 简单的负载均衡
+  * @param   cycle
+  * @retval  None
+  **/
 void
 ngx_event_process_posted(ngx_cycle_t *cycle, ngx_queue_t *posted)
 {
@@ -30,7 +35,7 @@ ngx_event_process_posted(ngx_cycle_t *cycle, ngx_queue_t *posted)
                       "posted event %p", ev);
 
         ngx_delete_posted_event(ev);
-
+        // 事件回调函数
         ev->handler(ev);
     }
 }

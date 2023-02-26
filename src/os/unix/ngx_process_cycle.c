@@ -73,7 +73,8 @@ static ngx_open_file_t  ngx_exit_log_file;
 /**
  * Nginx的多进程运行模式
  */
-void ngx_master_process_cycle(ngx_cycle_t *cycle)
+void 
+ngx_master_process_cycle(ngx_cycle_t *cycle)
 {
     char              *title;
     u_char            *p;
