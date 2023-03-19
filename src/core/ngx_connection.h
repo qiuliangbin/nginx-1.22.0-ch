@@ -41,7 +41,7 @@ struct ngx_listening_s
 #endif
 
     /* handler of accepted connection */
-    ngx_connection_handler_pt handler; //当新的tcp连接成功建立后的处理方法
+    ngx_connection_handler_pt handler; //当新的tcp连接成功建立后的回调处理方法
     //目前主要用于HTTP或者mail等模块，用于保存当前监听端口对应着的所有主机名
     void *servers; /* array of ngx_http_in_addr_t, for example */
 
@@ -128,18 +128,18 @@ struct ngx_connection_s
         连接未使用时，data用于充当连接池中空闲链表中的next指针。
         有连接套接字使用时，由模块而定: http中data指向ngx_http_connection_t
     */
-    void *data;
+    void *data; // 关联其它的ngx_connection_s
     ngx_event_t *read;  //连接对应的读事件
     ngx_event_t *write; //连接对应的写事件
 
     ngx_socket_t fd; //套接字描述符
 
-    ngx_recv_pt recv;             //接受网络字符流的方法
-    ngx_send_pt send;             //发送网络字符流的方法
-    ngx_recv_chain_pt recv_chain; //链表来表示结束网络字符流的方法
-    ngx_send_chain_pt send_chain; //链表来表示发送网络字符流的方法
+    ngx_recv_pt recv;             // 接收数据的函数指针
+    ngx_send_pt send;             // 发送数据的函数指针
+    ngx_recv_chain_pt recv_chain; // 批量接收数据的函数指针
+    ngx_send_chain_pt send_chain; // 批量发送数据的函数指针
 
-    ngx_listening_t *listening; //连接对应的ngx_listening_t监听的对象，此连接由listening监听端口的事件建立
+    ngx_listening_t *listening; // 该连接的网络监听数据结构
 
     off_t sent; //连接上已发送的字符数
 
@@ -166,9 +166,9 @@ struct ngx_connection_s
         unsigned long s_addr; // 4 bytes load with inet_pton()
     };
     */
-    struct sockaddr *sockaddr; //连接客户端的sockaddr
+    struct sockaddr *sockaddr; // 连接客户端的sockaddr
     socklen_t socklen;         // sockaddr结构体的长度
-    ngx_str_t addr_text;       //连接客户端字符串形式的IP地址
+    ngx_str_t addr_text;       // 连接客户端字符串形式的IP地址
 
     ngx_proxy_protocol_t *proxy_protocol; //代理源地址和端口/目的地址和端口
 
