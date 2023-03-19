@@ -28,9 +28,12 @@ static ngx_command_t  ngx_conf_commands[] = {
       ngx_null_command
 };
 
-
+// 配置模块 ngx_conf_module 是所有模块的基础，它实现了最基本的配置项解析功能（解析 nginx.conf文件），
+// 其他模块在生效前都需要依赖配置模块处理配置指令并完成各自的准备工作
 ngx_module_t  ngx_conf_module = {
     NGX_MODULE_V1,
+    // 模块都具备相同的 ngx_module_t 接口，但 ctx 指向不同的结构。
+    // 由于配置类型 NGX_CONF_MODULE的模块只拥有1个模块 ngx_conf_module，所以没有具体化 ctx上下文成员
     NULL,                                  /* module context */
     ngx_conf_commands,                     /* module directives */
     NGX_CONF_MODULE,                       /* module type */
@@ -159,7 +162,8 @@ ngx_conf_add_dump(ngx_conf_t *cf, ngx_str_t *filename)
  * @param {ngx_str_t} *filename
  * @return {*}
  */
-char *ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
+char *
+ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
 {
     char             *rv;
     ngx_fd_t          fd;

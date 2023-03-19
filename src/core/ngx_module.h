@@ -220,49 +220,62 @@
 
 
 struct ngx_module_s {
-    ngx_uint_t            ctx_index; //同一类型模块的顺序编号
-    ngx_uint_t            index;//模块的唯一标识编号，用于识别不同的模块
+    ngx_uint_t            ctx_index;                        // 模块在同类型模块数组中的索引序号
+    ngx_uint_t            index;                            // 模块在所有模块数组中的索引序号
+    char                 *name;                             // 模块名称
 
-    char                 *name;//模块名称
+    ngx_uint_t            spare0;                           // 保留变量
+    ngx_uint_t            spare1;                           // 保留变量
 
-    ngx_uint_t            spare0;
-    ngx_uint_t            spare1;
-
-    ngx_uint_t            version;//模块版本
+    ngx_uint_t            version;                          // 模块版本号 目前只有一种，默认为1
     const char           *signature;
+    /*
+     * ngx_module_t 中有一个类型为 void* 的 ctx成员，其定义了该模块的公共接口，每类模块都有各自特有的属性，
+     * 通过 void* 类型的ctx 变量进行抽象，同类型的模块遵循同一套通用性接口。
+     * ctx指向下列模块类型的对象之一:
+     *      ngx_core_module_t
+     *      ngx_http_module_t
+     *      ngx_event_module_t
+     *      ngx_mail_conf_ctx_t
+     * 模块都具备相同的ngx_module_t接口,但ctx指向不同的结构。由于配置类型NGX_CONF_MODULE的模块只拥有一个模块ngx_conf_module,
+     * 所以没有具体化ctx上下文成员
+     * */
+    void                 *ctx;                              // 模块上下文，用于放置一个模块自定义的结构
+    ngx_command_t        *commands;                         // 模块支持的命令集
+    ngx_uint_t            type;                             // 模块类型
 
-    void                 *ctx;//模块上下文，用于放置一个模块自定义的结构
-    ngx_command_t        *commands;//模块支持的命令集
-    ngx_uint_t            type;// 模块类型
-    // 初始化主进程调用
-    ngx_int_t           (*init_master)(ngx_log_t *log);
-    // 初始化模块时调用
-    ngx_int_t           (*init_module)(ngx_cycle_t *cycle);
-    // 初始化工作进程时调用
-    ngx_int_t           (*init_process)(ngx_cycle_t *cycle);
-    // 初始化线程时调用
-    ngx_int_t           (*init_thread)(ngx_cycle_t *cycle);
-    void                (*exit_thread)(ngx_cycle_t *cycle);
-    // 退出工作进程时调用
-    void                (*exit_process)(ngx_cycle_t *cycle);
-    // 退出主进程时调用
-    void                (*exit_master)(ngx_cycle_t *cycle);
+    ngx_int_t           (*init_master)(ngx_log_t *log);     // 初始化master主进程调用
+    ngx_int_t           (*init_module)(ngx_cycle_t *cycle); // 初始化模块时调用
+    ngx_int_t           (*init_process)(ngx_cycle_t *cycle);// 初始化worker工作进程时调用
+    ngx_int_t           (*init_thread)(ngx_cycle_t *cycle); // 初始化线程时调用(ginx暂时无多线程模式)
+    void                (*exit_thread)(ngx_cycle_t *cycle); // 线程退出时回调
+    void                (*exit_process)(ngx_cycle_t *cycle);// 退出工作进程时调用
+    void                (*exit_master)(ngx_cycle_t *cycle); // 退出主进程时调用
 
-    uintptr_t             spare_hook0;
-    uintptr_t             spare_hook1;
-    uintptr_t             spare_hook2;
-    uintptr_t             spare_hook3;
-    uintptr_t             spare_hook4;
-    uintptr_t             spare_hook5;
-    uintptr_t             spare_hook6;
-    uintptr_t             spare_hook7;
+    uintptr_t             spare_hook0;                      // 保留字段
+    uintptr_t             spare_hook1;                      // 保留字段
+    uintptr_t             spare_hook2;                      // 保留字段
+    uintptr_t             spare_hook3;                      // 保留字段
+    uintptr_t             spare_hook4;                      // 保留字段
+    uintptr_t             spare_hook5;                      // 保留字段
+    uintptr_t             spare_hook6;                      // 保留字段
+    uintptr_t             spare_hook7;                      // 保留字段
 };
 
 
 typedef struct {
     ngx_str_t             name;
-    void               *(*create_conf)(ngx_cycle_t *cycle);
-    char               *(*init_conf)(ngx_cycle_t *cycle, void *conf);
+
+    /*
+     * ngx_core_module_t 是以配置项的解析作为基础的。 create_conf 回调方法来创建存储配置项的数据结构
+     */
+    void               *(*create_conf)(ngx_cycle_t *cycle); // 解析配置项前Nginx框架会调用
+    /* init_conf回调方法使用解析出的配置项初始化核心模块功能
+     *
+     * 例如核心模块ngx_core_module （src/core/nginx.c）的 ctx 实例化为 ngx_core_module_ctx，
+     * 定义了 ngx_core_module_create_conf 和 ngx_core_module_init_conf 回调方法。
+     * */
+    char               *(*init_conf)(ngx_cycle_t *cycle, void *conf);// 解析配置项完成后，Nginx框架会调用
 } ngx_core_module_t;
 
 

@@ -101,7 +101,7 @@ static ngx_core_module_t  ngx_http_module_ctx = {
     NULL
 };
 
-
+// 核心模块 ngx_http_module 作为所有 HTTP 模块的 “代言”，负责加载所有的 HTTP 模块
 ngx_module_t  ngx_http_module = {
     NGX_MODULE_V1,
     &ngx_http_module_ctx,                  /* module context */

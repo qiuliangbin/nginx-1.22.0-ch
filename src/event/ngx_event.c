@@ -83,27 +83,40 @@ ngx_atomic_t         *ngx_stat_waiting = &ngx_stat_waiting0;
 
 #endif
 
-
+/*
+ * event模块命令集
+ * 回调函数: ngx_events_block() 用于解析 event{}块中的配置参数
+ *
+ * */
 static ngx_command_t ngx_events_commands[] = {
 
-        {ngx_string("events"),
+        {ngx_string("events"), /* 模块名称 */
+         /*
+          * NGX_MAIN_CONF: 配置文件的最外层指令
+          * NGX_CONF_BLOCK: 块命令 "{"字符开始和"}"字符结束
+          * NGX_CONF_NOARGS: 没有入参
+          * */
          NGX_MAIN_CONF | NGX_CONF_BLOCK | NGX_CONF_NOARGS,
-         ngx_events_block,
+         ngx_events_block, /* 创建ngx_event_core_module事件的核心模块以及配置信息的回调函数 */
          0,
          0,
          NULL},
 
-        ngx_null_command
+        ngx_null_command  /* 结束命令 */
 };
 
-
+/* event模块上下文 */
 static ngx_core_module_t ngx_events_module_ctx = {
         ngx_string("events"),
         NULL,
         ngx_event_init_conf
 };
 
-
+/*
+ * event模块
+ * 模块类型: NGX_CORE_MODULE
+ * 模块类型为核心模块, 所以在ngx_init_cycle就会初始化conf
+ * */
 ngx_module_t ngx_events_module = {
         NGX_MODULE_V1,
         &ngx_events_module_ctx,                /* module context */
@@ -119,40 +132,73 @@ ngx_module_t ngx_events_module = {
         NGX_MODULE_V1_PADDING
 };
 
-
+/* event核心模块名称 */
 static ngx_str_t event_core_name = ngx_string("event_core");
 
-
+/* 定义Event核心模块的命令参数
+ * 命令参数定义参照: https://blog.redis.com.cn/doc/core/events.html
+ * 详细描述参照: https://www.linuxdashen.com/nginx%E6%9C%8D%E5%8A%A1%E5%99%A8%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96
+ * */
 static ngx_command_t ngx_event_core_commands[] = {
-
-        {ngx_string("worker_connections"),
+        /* worker_connections的默认值是512,它在events模块中。它指定了一个worker进程在同一时间可以处理的最大请求数。
+         * */
+        {ngx_string("worker_connections"), // events { worker_connections 512; }
          NGX_EVENT_CONF | NGX_CONF_TAKE1,
          ngx_event_connections,
          0,
          0,
          NULL},
-
-        {ngx_string("use"),
+        /*
+         * Nginx处理请求的方法有很多种，每一个方法都允许Nginx Worker进程监测多个socket文件描述符
+         * Nginx支持以下请求处理方法:
+         *  1. select: 一种标准的请求处理方法。如果一个平台上缺少相应的更加有效的方法，那么Nginx会自动使用select方法
+         *  2. poll: 一种标准的请求处理方法。如果一个平台上缺少相应的更加有效的方法，那么Nginx会自动使用poll方法
+         *  3. kqueue: BSD家族操作系统上可用的一种高效的请求处理方法。可用于FreeBSD, OpenBSD, NetBSD和OS X。
+         *             kqueue方法会忽略multi_accept
+         *  4. epoll: Linux系统上可用的一种高效的请求处理方法，类似于kqueue。
+         *            它有一个额外的directive，那就是epoll_events。
+         *            epoll_events指定了Nginx可以向内核传递的事件数量。默认的值是512
+         * */
+        {ngx_string("use"), // events { use epoll; }
          NGX_EVENT_CONF | NGX_CONF_TAKE1,
          ngx_event_use,
          0,
          0,
          NULL},
-
-        {ngx_string("multi_accept"),
+        /*
+         * multi_accept可以让nginx worker进程尽可能多地接受请求。
+         * 它的作用是让worker进程一次性地接受监听队列里的所有请求，然后处理。
+         * 如果multi_accept的值设为off，那么worker进程必须一个一个地接受监听队列里的请求。
+         *
+         * 如果web服务器面对的是一个持续的请求流，那么启用multi_accept可能会造成worker进程一次接受的请求
+         * 大于worker_connections指定可以接受的请求数。这就是overflow，这个overflow会造成性能损失，
+         * overflow这部分的请求不会受到处理. 建议不开启，Nginx官方默认没有开启multi_accept
+         * */
+        {ngx_string("multi_accept"), // events { multi_accept off; }
          NGX_EVENT_CONF | NGX_CONF_FLAG,
          ngx_conf_set_flag_slot,
          0,
          offsetof(ngx_event_conf_t, multi_accept),
          NULL},
 
-        {ngx_string("accept_mutex"),
+         /* 当我们为nginx打开了多个worker进程后，我们需要配置如何选择worker进程来完成相应的请求处理.
+          * 在events模块中，我们可以设置 events { accept_mutex on; }
+          * accept_mutex会轮流来选择worker进程。Nginx默认开启了accept_mutex。
+          * 如果accept_mutex的值被设为off，那么当有请求需要处理时，所有的worker进程都会从waiting状态中唤醒，
+          * 但是只有一个worker进程能处理请求，这造成了thundering herd现象，这个现象每一秒钟会发生多次。
+          * 它使服务器的性能下降，因为所有被唤醒的worker进程在重新进入waiting状态前会占用一段CPU时间.
+          * */
+        {ngx_string("accept_mutex"), // events { accept_mutex on; } // nginx使用连接互斥锁进行顺序的accept()系统调用.
          NGX_EVENT_CONF | NGX_CONF_FLAG,
          ngx_conf_set_flag_slot,
          0,
          offsetof(ngx_event_conf_t, accept_mutex),
          NULL},
-
+        /*
+         * 当accept_mutex功能启用后，只有一个持有mutex锁的worker进程会接受并处理请求，其他worker进程等待。
+         * accept_mutex_delay指定的时间就是这些worker进程的等待时间，过了等待时间下一个worker进程便取得mutex锁，处理请求。
+         * accept_mutex_delay在events模块中指定，默认的值为500ms
+         * */
         {ngx_string("accept_mutex_delay"),
          NGX_EVENT_CONF | NGX_CONF_TAKE1,
          ngx_conf_set_msec_slot,
@@ -160,6 +206,22 @@ static ngx_command_t ngx_event_core_commands[] = {
          offsetof(ngx_event_conf_t, accept_mutex_delay),
          NULL},
 
+         /*
+          * 为选定的客户端连接启用调试日志，其他连接将使用由 error_log 指令设置的日志记录级别。
+          * 调试连接由 IPv4 或 IPv6 (1.3.0, 1.2.1) 地址或网络指定。也可以使用主机名指定连接。
+          * 对于使用 UNIX 域套接字（1.3.0、1.2.1）的连接，调试日志由 “unix:” 参数启用。
+          *
+          * 示例如下:
+                events {
+                    debug_connection 127.0.0.1;
+                    debug_connection localhost;
+                    debug_connection 192.0.2.0/24;
+                    debug_connection ::1;
+                    debug_connection 2001:0db8::/32;
+                    debug_connection unix:;
+                    ...
+                }
+          * */
         {ngx_string("debug_connection"),
          NGX_EVENT_CONF | NGX_CONF_TAKE1,
          ngx_event_debug_connection,
@@ -170,7 +232,11 @@ static ngx_command_t ngx_event_core_commands[] = {
         ngx_null_command
 };
 
-
+/*
+ * Event核心模块上下文
+ * ngx_event_core_create_conf：创建配置文件
+ * ngx_event_core_init_conf：初始化配置文件
+ */
 static ngx_event_module_t ngx_event_core_module_ctx = {
         &event_core_name,
         ngx_event_core_create_conf,            /* create configuration */
@@ -179,7 +245,12 @@ static ngx_event_module_t ngx_event_core_module_ctx = {
         {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL}
 };
 
-
+/*
+ * Event核心模块
+ * ngx_event_module_init：模块初始化
+ * ngx_event_process_init：进程初始化
+ * 类型：NGX_EVENT_MODULE
+ */
 ngx_module_t ngx_event_core_module = {
         NGX_MODULE_V1,
         &ngx_event_core_module_ctx,            /* module context */
@@ -510,6 +581,9 @@ ngx_event_init_conf(ngx_cycle_t *cycle, void *conf) {
 }
 
 
+/*
+ * event事件核心模块初始化函数
+ */
 static ngx_int_t
 ngx_event_module_init(ngx_cycle_t *cycle) {
     void ***cf;
@@ -519,7 +593,7 @@ ngx_event_module_init(ngx_cycle_t *cycle) {
     ngx_time_t *tp;
     ngx_core_conf_t *ccf;
     ngx_event_conf_t *ecf;
-
+    // 获取配置信息
     cf = ngx_get_conf(cycle->conf_ctx, ngx_events_module);
     ecf = (*cf)[ngx_event_core_module.ctx_index];
 
@@ -1007,14 +1081,14 @@ ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     if (ctx == NULL) {
         return NGX_CONF_ERROR;
     }
-
+    /* 分配内存空间 */
     *ctx = ngx_pcalloc(cf->pool, ngx_event_max_module * sizeof(void *));
     if (*ctx == NULL) {
         return NGX_CONF_ERROR;
     }
 
     *(void **) conf = ctx;
-
+    /* 模块初始化，如果是NGX_EVENT_MODULE，则调用模块的create_conf方法 */
     for (i = 0; cf->cycle->modules[i]; i++) {
         if (cf->cycle->modules[i]->type != NGX_EVENT_MODULE) {
             continue;
@@ -1035,7 +1109,7 @@ ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     cf->ctx = ctx;
     cf->module_type = NGX_EVENT_MODULE;
     cf->cmd_type = NGX_EVENT_CONF;
-
+    /* 调用配置解析，这次解析的是{}块中的内容，非文件内容 */
     rv = ngx_conf_parse(cf, NULL);
 
     *cf = pcf;
@@ -1043,7 +1117,7 @@ ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     if (rv != NGX_CONF_OK) {
         return rv;
     }
-
+    /* 初始化event模块的init_conf方法*/
     for (i = 0; cf->cycle->modules[i]; i++) {
         if (cf->cycle->modules[i]->type != NGX_EVENT_MODULE) {
             continue;
@@ -1253,15 +1327,18 @@ ngx_event_debug_connection(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
 }
 
 
+/*
+ * 创建Event的核心配置文件
+ */
 static void *
 ngx_event_core_create_conf(ngx_cycle_t *cycle) {
     ngx_event_conf_t *ecf;
-
+    /* 分配配置文件内容 */
     ecf = ngx_palloc(cycle->pool, sizeof(ngx_event_conf_t));
     if (ecf == NULL) {
         return NULL;
     }
-
+    /* 设置默认值 */
     ecf->connections = NGX_CONF_UNSET_UINT;
     ecf->use = NGX_CONF_UNSET_UINT;
     ecf->multi_accept = NGX_CONF_UNSET;
@@ -1282,7 +1359,9 @@ ngx_event_core_create_conf(ngx_cycle_t *cycle) {
     return ecf;
 }
 
-
+/*
+ * 初始化Event的核心配置文件
+ */
 static char *
 ngx_event_core_init_conf(ngx_cycle_t *cycle, void *conf) {
     ngx_event_conf_t *ecf = conf;
@@ -1355,7 +1434,7 @@ ngx_event_core_init_conf(ngx_cycle_t *cycle, void *conf) {
 
     ngx_conf_init_uint_value(ecf->connections, DEFAULT_CONNECTIONS);
     cycle->connection_n = ecf->connections;
-
+    /* 存储使用的事件模型模块索引 例如：epoll、kqueue */
     ngx_conf_init_uint_value(ecf->use, module->ctx_index);
 
     event_module = module->ctx;

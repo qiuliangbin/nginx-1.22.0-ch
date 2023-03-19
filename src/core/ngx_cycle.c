@@ -31,11 +31,14 @@ static ngx_connection_t dumb;
 /* STUB */
 
 /**
- * @description:
+ * @description: 初始化ngx_cycle_t结构体,其存储在系统运行过程中的所有信息，
+ * 包括配置文件信息、模块信息、客户端连接、读写事件处理函数等信息,
+ * Nginx 围绕着ngx_cycle_t (src/core/ngx_cycle.h) 来控制进程的运行.
  * @param {ngx_cycle_t} *old_cycle
  * @return {*}
  */
-ngx_cycle_t *ngx_init_cycle(ngx_cycle_t *old_cycle)
+ngx_cycle_t *
+ngx_init_cycle(ngx_cycle_t *old_cycle)
 {
     void *rv;
     char **senv;
@@ -234,7 +237,7 @@ ngx_cycle_t *ngx_init_cycle(ngx_cycle_t *old_cycle)
      * */
     for (i = 0; cycle->modules[i]; i++)
     {
-        if (cycle->modules[i]->type != NGX_CORE_MODULE)
+        if (cycle->modules[i]->type != NGX_CORE_MODULE) // 跳过非核心模块
         {
             continue;
         }
@@ -257,7 +260,7 @@ ngx_cycle_t *ngx_init_cycle(ngx_cycle_t *old_cycle)
     // 11. 配置文件nginx.conf解析
     ngx_memzero(&conf, sizeof(ngx_conf_t));
     /* STUB: init array ? */
-    conf.args = ngx_array_create(pool, 10, sizeof(ngx_str_t));
+    conf.args = ngx_array_create(pool, 10, sizeof(ngx_str_t)); // args存放解析到的指令和参数
     if (conf.args == NULL)
     {
         ngx_destroy_pool(pool);
@@ -271,11 +274,15 @@ ngx_cycle_t *ngx_init_cycle(ngx_cycle_t *old_cycle)
         return NULL;
     }
 
-    conf.ctx = cycle->conf_ctx;
+    conf.ctx = cycle->conf_ctx; // ctx指向解析出来信息的存放地址
     conf.cycle = cycle;
     conf.pool = pool;
     conf.log = log;
     conf.module_type = NGX_CORE_MODULE; // 配置文件模块类型
+    /* 1.NGX_MAIN_CONF表示的是全局作用域对应的配置信息，
+     * 2.NGX_EVENT_CONF表示的是 EVENT模块对应的配置信息
+     * 3.NGX_HTTP_MAIN_CONF，NGX_HTTP_SRV_CONF，NGX_HTTP_LOC_CONF表示的是HTTP模块对应的main、server和local域的配置信息
+     * */
     conf.cmd_type = NGX_MAIN_CONF; // 命令集类型
 
 #if 0
@@ -302,16 +309,16 @@ ngx_cycle_t *ngx_init_cycle(ngx_cycle_t *old_cycle)
         ngx_log_stderr(0, "the configuration file %s syntax is ok",
                        cycle->conf_file.data);
     }
-
+    // 初始化核心模块的配置
     for (i = 0; cycle->modules[i]; i++)
     {
-        if (cycle->modules[i]->type != NGX_CORE_MODULE)
+        if (cycle->modules[i]->type != NGX_CORE_MODULE) // 跳过非核心模块的配置初始化
         {
             continue;
         }
 
         module = cycle->modules[i]->ctx;
-
+        // 在所有core module中，只有ngx_core_module有init_conf回调，用于对ngx_core_conf_t中没有配置的字段设置默认值
         if (module->init_conf)
         {
             if (module->init_conf(cycle, cycle->conf_ctx[cycle->modules[i]->index]) == NGX_CONF_ERROR)

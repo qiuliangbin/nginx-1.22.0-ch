@@ -110,8 +110,10 @@ struct ngx_command_s {
             GX_HTTP_MAIN_CONF_OFFSET、NGX_HTTP_SRV_CONF_OFFSET或NGX_HTTP_LOC_CONF_OFFSET
     */
     ngx_uint_t            conf;
+    // 表示当前配置项在整个存储配置项的结构体中的偏移位置
     ngx_uint_t            offset; // 用来标记ngx_<module_name>_conf_t中某成员变量的偏移量，纯粹是为了使用方便
-    void                 *post; // 可以指向任何一个在读取配置过程中需要的数据，以便进行配置读取的数据。大多数时候不需要，直接设置为0即可
+    // 配置项读取后的处理方法 必须是ngx_conf_post_t结构体的指针
+    void                 *post;
 };
 // 一般作为ngx_command_s配置数组的结束标志
 #define ngx_null_command  { ngx_null_string, 0, NULL, 0, 0, NULL }

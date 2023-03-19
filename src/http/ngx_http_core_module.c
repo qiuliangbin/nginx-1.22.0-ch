@@ -796,7 +796,8 @@ static ngx_http_module_t  ngx_http_core_module_ctx = {
     ngx_http_core_merge_loc_conf           /* merge location configuration */
 };
 
-
+// ngx_http_core_module作为HTTP核心业务与管理功能的模块，决定了HTTP业务的核心逻辑，
+// 以及对于具体的请求该选用哪一个HTTP模块处理这样的工作.
 ngx_module_t  ngx_http_core_module = {
     NGX_MODULE_V1,
     &ngx_http_core_module_ctx,             /* module context */

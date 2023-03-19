@@ -33,6 +33,7 @@ struct ngx_shm_zone_s
 
 struct ngx_cycle_s
 {
+    // 保存着所有模块存储配置项的结构体的指针，它首先是一个数组，每个数组成员又是一个指针，这个指针指向另一个存储着指针的数组
     void ****conf_ctx; // 保存着所有模块配置的结构体指针
     ngx_pool_t *pool;  // 内存池地址
 
