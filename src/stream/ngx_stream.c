@@ -69,7 +69,7 @@ ngx_module_t  ngx_stream_module = {
     NGX_MODULE_V1_PADDING
 };
 
-
+/* Nginx 解析配置文件如果扫描代“stream {”则会执行ngx_stream_block()解析函数 */
 static char *
 ngx_stream_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
@@ -82,7 +82,7 @@ ngx_stream_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_stream_conf_ctx_t         *ctx;
     ngx_stream_core_srv_conf_t   **cscfp;
     ngx_stream_core_main_conf_t   *cmcf;
-
+    // 检查 conf 有没有被赋值。如果有，则说明配置文件有多个 “stream {”，需要报错
     if (*(ngx_stream_conf_ctx_t **) conf) {
         return "is duplicate";
     }
@@ -93,11 +93,13 @@ ngx_stream_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     if (ctx == NULL) {
         return NGX_CONF_ERROR;
     }
-
+    /* conf = &cycle->conf_ctx[x]; conf的指向为sizeof(ngx_stream_conf_ctx_t)大小的内存 */
+    /* 分配一段内存，其类型是 ngx_stream_conf_ctx_t，并将其地址保存到 cycle->conf_ctx[x] */
     *(ngx_stream_conf_ctx_t **) conf = ctx;
 
     /* count the number of the stream modules and set up their indices */
-
+    /* Nginx 会调用 ngx_count_modules() 统计 stream 子模块的数量，并依次编号，编号保存在该模块的 ctx_index 字段。
+     * 然后就是为所有子模块分配内存地址指针 */
     ngx_stream_max_module = ngx_count_modules(cf->cycle, NGX_STREAM_MODULE);
 
 
@@ -149,7 +151,7 @@ ngx_stream_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         }
     }
 
-
+    // 备份 cf 状态
     pcf = *cf;
     cf->ctx = ctx;
 
@@ -244,7 +246,7 @@ ngx_stream_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     if (ngx_stream_variables_init_vars(cf) != NGX_OK) {
         return NGX_CONF_ERROR;
     }
-
+    // 恢复 cf 状态
     *cf = pcf;
 
     if (ngx_stream_init_phase_handlers(cf, cmcf) != NGX_OK) {
