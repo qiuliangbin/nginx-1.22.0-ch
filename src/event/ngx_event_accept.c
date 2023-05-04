@@ -12,7 +12,7 @@
 
 static ngx_int_t ngx_disable_accept_events(ngx_cycle_t *cycle, ngx_uint_t all);
 #if (NGX_HAVE_EPOLLEXCLUSIVE)
-2static void ngx_reorder_accept_events(ngx_listening_t *ls);
+static void ngx_reorder_accept_events(ngx_listening_t *ls);
 #endif
 static void ngx_close_accepted_connection(ngx_connection_t *c);
 
@@ -336,7 +336,7 @@ ngx_trylock_accept_mutex(ngx_cycle_t *cycle)
 
         ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                        "accept mutex locked");
-        // 多次进来，判断是否已经拿到锁
+        // 判断是否需要释放accept锁。如果accept锁被持有，并且没有新的连接事件需要处理，那么就可以释放锁了，返回NGX_OK。
         if (ngx_accept_mutex_held && ngx_accept_events == 0) {
             return NGX_OK;
         }

@@ -853,11 +853,12 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
     }
 
     for (i = 0; i < events; i++) {
+        // 从事件列表中获取一个事件，并从事件的数据指针中获取一个ngx_connection_t类型的连接对象c
         c = event_list[i].data.ptr;
-
+        // 通过位运算获取连接对象的instance值，并将c指针还原为原始指针
         instance = (uintptr_t) c & 1;
         c = (ngx_connection_t *) ((uintptr_t) c & (uintptr_t) ~1);
-
+        // 获取连接对象的读事件rev
         rev = c->read;
 
         if (c->fd == -1 || rev->instance != instance) {
@@ -872,12 +873,14 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
             continue;
         }
 
-        revents = event_list[i].events; // epoll就绪事件列表
+        revents = event_list[i].events; // epoll事件类型
 
         ngx_log_debug3(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                        "epoll: fd:%d ev:%04XD d:%p",
                        c->fd, revents, event_list[i].data.ptr);
-
+        /* EPOLLERR：表示对应的文件描述符发生错误
+         * EPOLLHUP：表示对应的文件描述符被挂起
+         * */
         if (revents & (EPOLLERR|EPOLLHUP)) {
             ngx_log_debug2(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                            "epoll_wait() error on fd:%d ev:%04XD",
