@@ -103,18 +103,25 @@ ngx_slab_init(ngx_slab_pool_t *pool)
     ngx_int_t         m;
     ngx_uint_t        i, n, pages;
     ngx_slab_page_t  *slots, *page;
-
+    /*slab的最小分配单元，当申请的内存比min_size还小时，则取整到min_size；
+    通常min_shift=3，则min_size=8*/
     pool->min_size = (size_t) 1 << pool->min_shift;
 
     slots = ngx_slab_slots(pool);
-
+    /*slot分级管理数组的起始地址*/
     p = (u_char *) slots;
     size = pool->end - p;
 
     ngx_slab_junk(p, size);
-
+    /* 从最小块大小到页大小之间的分级数 */
     n = ngx_pagesize_shift - pool->min_shift;
-
+    /*  ngx_slab.c 的实现中将内存分配分为两大类：
+     *      1.基于页（page）的内存分配，由 page 页内存管理单元来进行管理，实现相对简单，
+     *  因为整个内存池的基本结构就是以页为单位进行划分的.
+     *      2.基于块（chunk）的内存分配，将一页划分为若干块，实现相对复杂，除了page页内存管理单元外,
+     *  还引入了分级内存管理单元（slot 数组）来共同管理；
+     * */
+    /* 一页(page)内存对应的块(chunk)的数量 8 16 32 64 128 256 512 1024 2048 */
     for (i = 0; i < n; i++) {
         /* only "next" is used in list head */
         slots[i].slab = 0;
@@ -814,4 +821,38 @@ static void
 ngx_slab_error(ngx_slab_pool_t *pool, ngx_uint_t level, char *text)
 {
     ngx_log_error(level, ngx_cycle->log, 0, "%s%s", text, pool->log_ctx);
+}
+
+#define BUF_LEN (1 * 1024 * 1024)    //分配1Mb空间用于slab代码演示
+
+int main(int argc,char *argv[])
+{
+    ngx_slab_pool_t *_sp = NULL;
+    char *dest = NULL;
+    char *target = NULL;
+    char *p = (char *)malloc(BUF_LEN);      //分配1Mb内存供slab操作使用
+    if (NULL == p)
+    {
+        printf ("malloc failed, size is %d\n", BUF_LEN);
+        return -1;
+    }
+    end = p + BUF_LEN;
+    *_sp = (ngx_slab_pool_t *)p;
+    _sp->min_shift = 3;
+    _sp->end = end;
+
+    ngx_slab_init(_sp);    // slab内存初始化，主要是对分配好的内存做规划，那部分是管理，那部分是实际
+    // 最后用到的内存
+
+    printf("slab_init success.");
+
+    dest = (char *)ngx_slab_alloc_locked((ngx_slab_pool_t *)ptr, 2500);   // 先分配一块大于半页内存的空间
+    printf("dest = %p\n", dest);
+
+    target = (char *)ngx_slab_alloc_locked((ngx_slab_pool_t *)ptr, 10000); //在原有已分配的空间下再分配一块一万字节的空间
+    printf("target = %p\n", target);
+
+    free(ptr);
+    ptr = NULL;
+    return 0;
 }

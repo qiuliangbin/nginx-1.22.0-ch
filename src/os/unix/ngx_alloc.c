@@ -9,9 +9,9 @@
 #include <ngx_core.h>
 
 
-ngx_uint_t  ngx_pagesize;
-ngx_uint_t  ngx_pagesize_shift;
-ngx_uint_t  ngx_cacheline_size;
+ngx_uint_t  ngx_pagesize;       // 页大小,大部分系统默认为4K, 取值由linux系统函数getpagesize()决定
+ngx_uint_t  ngx_pagesize_shift; // 与pagesize对应的位移数, 大部分系统默认为12,
+ngx_uint_t  ngx_cacheline_size; // cpu缓存大小, 取值由NGX_CPU_CACHE_LINE决定
 
 
 void *

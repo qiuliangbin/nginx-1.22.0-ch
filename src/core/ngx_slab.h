@@ -34,8 +34,8 @@ typedef struct {
 typedef struct {
     ngx_shmtx_sh_t    lock;
 
-    size_t            min_size;
-    size_t            min_shift;
+    size_t            min_size;  // slab分配器的最小分配单位
+    size_t            min_shift; // 与mini_size对应的位移数
 
     ngx_slab_page_t  *pages;
     ngx_slab_page_t  *last;
