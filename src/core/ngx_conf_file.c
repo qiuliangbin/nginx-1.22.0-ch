@@ -462,9 +462,54 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
                 conf = &(((void **) cf->ctx)[cf->cycle->modules[i]->index]);
 
             } else if (cf->ctx) {
+                /*  daemon off;
+                    events {}
+                    stream {
+                        server {
+                            listen 1024;
+                            return "hello\n";
+                        }
+                    }
+                 * 解析到"server {"时cmd->type == NGX_STREAM_MAIN_CONF, server指令块对应的cmd为:
+                 *     {  ngx_string("server"),
+                          NGX_STREAM_MAIN_CONF|NGX_CONF_BLOCK|NGX_CONF_NOARGS,
+                          ngx_stream_core_server,
+                          0,
+                          0,
+                          NULL },
+                 * 此时，cf->ctx 为 ngx_stream_conf_ctx_t结构体类型的指针。
+                 * struct ngx_command_s {
+                        ngx_str_t             name; // 本条指令的名字，例如worker_processes 1;对应的ngx_command_s.name就是worker_processes
+                        ngx_uint_t            type; // 配置指令属性的集合
+                        char               *(*set)(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+                        ngx_uint_t            conf;
+                        ngx_uint_t            offset; // 用来标记ngx_<module_name>_conf_t中某成员变量的偏移量，纯粹是为了使用方便
+                        void                 *post; // 可以指向任何一个在读取配置过程中需要的数据，以便进行配置读取的数据。大多数时候不需要，直接设置为0即可
+                    };
+                 * 此时此刻: cmd->conf = 0
+                 *
+                 * #define NGX_STREAM_SRV_CONF_OFFSET offsetof(ngx_stream_conf_ctx_t, srv_conf)
+                 * 解析到"listen "时cmd->type == NGX_STREAM_SRV_CONF|NGX_CONF_1MORE, listen指令对应的cmd为:
+                 *     {  ngx_string("listen"),
+                          NGX_STREAM_SRV_CONF|NGX_CONF_1MORE,
+                          ngx_stream_core_listen,
+                          NGX_STREAM_SRV_CONF_OFFSET,
+                          0,
+                          NULL },
+                 * 此时此刻: cf->ctx + cmd->conf 就是 ngx_stream_conf_ctx_t->srv_conf
+                 * */
                 confp = *(void **) ((char *) cf->ctx + cmd->conf);
 
                 if (confp) {
+                    /* 解析 "stream {", 则加载cmd->type == NGX_STREAM_MAIN_CONF的所有子指令。*/
+                    /* 如下: variables_hash_max_size,
+                     *      variables_hash_bucket_size,
+                     *      server,
+                     *      ...
+                     *      allow,
+                     *      delay等待
+                     * 上述模块内的子命令在初始化时,用模块内的ctx_index进行索引标识
+                     * */
                     conf = confp[cf->cycle->modules[i]->ctx_index];
                 }
             }
@@ -603,7 +648,7 @@ static ngx_int_t ngx_conf_read_token(ngx_conf_t *cf)
                 // 处理完配置文件.
                 return NGX_CONF_FILE_DONE;
             }
-            // 未处理的缓冲区字符长度.
+            // 已使用缓冲区的长度.
             len = b->pos - start;
             /* 
                 如果len=4096 则表明buf全部读取满了；
@@ -634,9 +679,9 @@ static ngx_int_t ngx_conf_read_token(ngx_conf_t *cf)
             if (len) {
                 ngx_memmove(b->start, start, len);
             }
-            // 配置文件未处理的长度.
-            size = (ssize_t) (file_size - cf->conf_file->file.offset);
-            // 若超过可用缓冲区长度则一次读取可用缓冲区长度的字符.
+            // 配置文件未处理的长度.(配置文件还有多长没有被解析完)
+            size = (ssize_t)(file_size - cf->conf_file->file.offset);
+            // 若[文件剩余未处理长度]超过[剩余可用缓冲区长度],则只读取[可用缓冲区长度]的字符.
             if (size > b->end - (b->start + len)) {
                 size = b->end - (b->start + len);
             }

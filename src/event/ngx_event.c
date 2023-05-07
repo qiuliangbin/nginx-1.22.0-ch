@@ -593,32 +593,41 @@ ngx_event_module_init(ngx_cycle_t *cycle) {
     ngx_time_t *tp;
     ngx_core_conf_t *ccf;
     ngx_event_conf_t *ecf;
-    // 获取配置信息
+    // ngx_events_module核心模块的配置结构体
     cf = ngx_get_conf(cycle->conf_ctx, ngx_events_module);
+    // ngx_event_core_module事件模块的配置结构体
     ecf = (*cf)[ngx_event_core_module.ctx_index];
 
     if (!ngx_test_config && ngx_process <= NGX_PROCESS_MASTER) {
         ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0,
                       "using the \"%s\" event method", ecf->name);
     }
-
+    // ngx_core_module核心模块的配置结构体
     ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx, ngx_core_module);
-
+    // 获取ngx_core_module核心模块的时间精度,用在epoll里更新缓存时间
     ngx_timer_resolution = ccf->timer_resolution;
-
+    // 可打开的最大文件描述符
 #if !(NGX_WIN32)
-    {
+    {// 检查可打开的最大文件描述符数量是否超过系统资源限制
         ngx_int_t limit;
         struct rlimit rlmt;
 
-        if (getrlimit(RLIMIT_NOFILE, &rlmt) == -1) {
+        if (getrlimit(RLIMIT_NOFILE, &rlmt) == -1) { //获取当前操作系统的可打开文件描述符的最大数量
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "getrlimit(RLIMIT_NOFILE) failed, ignored");
 
         } else {
-            if (ecf->connections > (ngx_uint_t) rlmt.rlim_cur
+            // event里配置的连接数不能超过系统内核限制
+            // 或者是配置的rlimit_nofile限制
+            if (ecf->connections > (ngx_uint_t) rlmt.rlim_cur //当前worker进程已经打开的连接数 > 系统资源限制的软限制值
                 && (ccf->rlimit_nofile == NGX_CONF_UNSET
                     || ecf->connections > (ngx_uint_t) ccf->rlimit_nofile)) {
+                /*
+                 * ccf->rlimit_nofile是Nginx服务器中一个用于配置的参数，表示每个worker进程可以打开的最大文件描述符数量。
+                 * 在Nginx的配置文件中，可以通过worker_rlimit_nofile指令来设置这个参数的值。例如：
+                 *      worker_rlimit_nofile  65535;
+                 * 设置每个worker进程可以打开的最大文件描述符数量为65535
+                 * */
                 limit = (ccf->rlimit_nofile == NGX_CONF_UNSET) ?
                         (ngx_int_t) rlmt.rlim_cur : ccf->rlimit_nofile;
 
@@ -631,24 +640,28 @@ ngx_event_module_init(ngx_cycle_t *cycle) {
     }
 #endif /* !(NGX_WIN32) */
 
-
+    // 如果非master/worker进程，即只启动一个进程，那么就没必要使用负载均衡锁vv
     if (ccf->master == 0) {
         return NGX_OK;
     }
-
+    // 已经有了负载均衡锁，已经初始化过了，就没必要再做操作
     if (ngx_accept_mutex_ptr) {
         return NGX_OK;
     }
 
 
     /* cl should be equal to or greater than cache line size */
-
+    // cl是一个基本长度，可以容纳原子变量
+    // 对齐到cache line，操作更快
     cl = 128;
-
+    // 最基本的三个：负载均衡锁，连接计数器,随机数存储器
     size = cl            /* ngx_accept_mutex */
            + cl          /* ngx_connection_counter */
            + cl;         /* ngx_temp_number */
-
+    // ngx_temp_number 是一个 ngx_atomic_t 类型的变量，用于存储一些临时的数字。
+    // 在这段代码中，它被初始化为共享内存中的第三个缓存行的地址。
+    // 在 Nginx 的事件模块中，它主要用于生成随机数，例如在 ngx_event_accept 函数中，
+    // 会使用 ngx_temp_number 生成一个随机数，用于选择一个 worker 进程来处理新连接
 #if (NGX_STAT_STUB)
 
     size += cl           /* ngx_stat_accepted */
@@ -660,42 +673,48 @@ ngx_event_module_init(ngx_cycle_t *cycle) {
            + cl;         /* ngx_stat_waiting */
 
 #endif
-
+    // 创建共享内存，存放负载均衡锁和统计用的原子变量
     shm.size = size;
     ngx_str_set(&shm.name, "nginx_shared_zone");
     shm.log = cycle->log;
-
+    // 利用 mmap 分配一块共享内存
     if (ngx_shm_alloc(&shm) != NGX_OK) {
         return NGX_ERROR;
     }
-
+    // shared是共享内存的地址指针
     shared = shm.addr;
-
+    // 第一个就是负载均衡锁
     ngx_accept_mutex_ptr = (ngx_atomic_t *) shared;
+    // spin是-1则不使用信号量
+    // 只会自旋，不会导致进程睡眠等待
+    // 这样避免抢accept锁时的性能降低
     ngx_accept_mutex.spin = (ngx_uint_t) - 1;
-
+    // 初始化互斥锁
+    // spin是-1则不使用信号量
+    // 只会自旋，不会导致进程睡眠等待
     if (ngx_shmtx_create(&ngx_accept_mutex, (ngx_shmtx_sh_t *) shared,
                          cycle->lock_file.data)
         != NGX_OK) {
         return NGX_ERROR;
     }
-
+    // 初始化连接计数器
     ngx_connection_counter = (ngx_atomic_t * )(shared + 1 * cl);
-
+    // 原子操作，把 ngx_connection_counter 从0设置为1
     (void) ngx_atomic_cmp_set(ngx_connection_counter, 0, 1);
 
     ngx_log_debug2(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                    "counter: %p, %uA",
                    ngx_connection_counter, *ngx_connection_counter);
-
+    // 临时文件用
     ngx_temp_number = (ngx_atomic_t * )(shared + 2 * cl);
 
     tp = ngx_timeofday();
-
+    // 随机数
+    // 每个进程不同
     ngx_random_number = (tp->msec << 16) + ngx_pid;
 
 #if (NGX_STAT_STUB)
-
+    // 初始化统计信息
     ngx_stat_accepted = (ngx_atomic_t *) (shared + 3 * cl);
     ngx_stat_handled = (ngx_atomic_t *) (shared + 4 * cl);
     ngx_stat_requests = (ngx_atomic_t *) (shared + 5 * cl);
@@ -1060,7 +1079,15 @@ ngx_send_lowat(ngx_connection_t *c, size_t lowat) {
     return NGX_OK;
 }
 
-
+/**
+  * @brief   event配置模块解析
+  * @note    events {
+  *             worker_connections 1024;
+  *          }
+  * @param   cf: events{}块命令的配置文件首地址,
+  *          cmd:
+  * @retval  None
+  **/
 static char *
 ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     char *rv;
@@ -1074,19 +1101,27 @@ ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     }
 
     /* count the number of the event modules and set up their indices */
-
     ngx_event_max_module = ngx_count_modules(cf->cycle, NGX_EVENT_MODULE);
 
     ctx = ngx_pcalloc(cf->pool, sizeof(void *));
     if (ctx == NULL) {
         return NGX_CONF_ERROR;
     }
-    /* 分配内存空间 */
+    // 给ngx_event_module下面的子模块类型为NGX_EVENT_MODULE的指针分配存储空间
     *ctx = ngx_pcalloc(cf->pool, ngx_event_max_module * sizeof(void *));
     if (*ctx == NULL) {
         return NGX_CONF_ERROR;
     }
-
+    /*
+     * 构建 root_ctx |->  ngx_core_module
+     *               |-> ngx_events_module |-> ngx_event_core_module
+     *                                     |-> ngx_epoll_module
+     *                                     |-> ...
+     *                                     |-> ngx_select_module
+     *               |-> ...
+     *               |-> ngx_http_module
+     *  的存储结构
+     * */
     *(void **) conf = ctx;
     /* 模块初始化，如果是NGX_EVENT_MODULE，则调用模块的create_conf方法 */
     for (i = 0; cf->cycle->modules[i]; i++) {
@@ -1097,6 +1132,7 @@ ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
         m = cf->cycle->modules[i]->ctx;
 
         if (m->create_conf) {
+            // 给ngx_event_module下面的子模块类型为NGX_EVENT_MODULE的指针指向的配置命令分配存储空间
             (*ctx)[cf->cycle->modules[i]->ctx_index] =
                     m->create_conf(cf->cycle);
             if ((*ctx)[cf->cycle->modules[i]->ctx_index] == NULL) {
@@ -1109,7 +1145,7 @@ ngx_events_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     cf->ctx = ctx;
     cf->module_type = NGX_EVENT_MODULE;
     cf->cmd_type = NGX_EVENT_CONF;
-    /* 调用配置解析，这次解析的是{}块中的内容，非文件内容 */
+    // 调用配置解析,这里解析的是events{}命令块内的内容,非文件内容
     rv = ngx_conf_parse(cf, NULL);
 
     *cf = pcf;
@@ -1327,18 +1363,15 @@ ngx_event_debug_connection(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
 }
 
 
-/*
- * 创建Event的核心配置文件
- */
 static void *
 ngx_event_core_create_conf(ngx_cycle_t *cycle) {
     ngx_event_conf_t *ecf;
-    /* 分配配置文件内容 */
+
     ecf = ngx_palloc(cycle->pool, sizeof(ngx_event_conf_t));
     if (ecf == NULL) {
         return NULL;
     }
-    /* 设置默认值 */
+
     ecf->connections = NGX_CONF_UNSET_UINT;
     ecf->use = NGX_CONF_UNSET_UINT;
     ecf->multi_accept = NGX_CONF_UNSET;
@@ -1359,9 +1392,7 @@ ngx_event_core_create_conf(ngx_cycle_t *cycle) {
     return ecf;
 }
 
-/*
- * 初始化Event的核心配置文件
- */
+
 static char *
 ngx_event_core_init_conf(ngx_cycle_t *cycle, void *conf) {
     ngx_event_conf_t *ecf = conf;
@@ -1434,7 +1465,7 @@ ngx_event_core_init_conf(ngx_cycle_t *cycle, void *conf) {
 
     ngx_conf_init_uint_value(ecf->connections, DEFAULT_CONNECTIONS);
     cycle->connection_n = ecf->connections;
-    /* 存储使用的事件模型模块索引 例如：epoll、kqueue */
+
     ngx_conf_init_uint_value(ecf->use, module->ctx_index);
 
     event_module = module->ctx;

@@ -155,16 +155,30 @@ ngx_uint_t                  ngx_use_epoll_rdhup;
 #endif
 
 static ngx_str_t      epoll_name = ngx_string("epoll");
-
+// epoll模块命令集
 static ngx_command_t  ngx_epoll_commands[] = {
-
+    /*
+        epoll_events 是 Nginx 配置指令中的一个参数，用于设置每个工作进程（worker process）在使用epoll I/O多路复用时可以同时处理的最大事件数。
+            epoll是一种I/O多路复用机制，它可以同时监控多个文件描述符上的事件，并在事件发生时通知应用程序进行处理。
+        在Nginx中，epoll主要用于处理网络连接和文件I/O操作。
+            epoll_events 参数的默认值为 512，表示每个工作进程可以同时处理的最大 epoll 事件数为 512。如果系统中同时有大量的epoll事件，
+        可以适当增加该参数的值，以提高系统的并发性能。但是，如果设置过高，可能会导致系统资源的浪费和性能下降。
+            注意:epoll_events 参数只有在 Nginx 编译时启用了 epoll 支持（--with-http_epoll_module）才会生效。
+     */
     { ngx_string("epoll_events"),
       NGX_EVENT_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_num_slot,
       0,
       offsetof(ngx_epoll_conf_t, events),
       NULL },
-
+    /*
+    worker_aio_requests 是 Nginx 配置指令中的一个参数，用于设置每个工作进程（worker process）在使用异步 I/O 时可以同时处理的最大请求数。
+        异步 I/O 是一种 I/O 操作模式，它允许应用程序在等待 I/O 操作完成时继续执行其他任务，从而提高系统的并发性和吞吐量。
+    在 Nginx 中，异步 I/O 主要用于处理网络连接和文件 I/O 操作。
+        worker_aio_requests 参数的默认值为 32，表示每个工作进程可以同时处理的最大异步 I/O 请求数为 32。
+    如果系统中同时有大量的异步 I/O 请求，可以适当增加该参数的值，以提高系统的并发性能。但是，如果设置过高，可能会导致系统资源的浪费和性能下降
+        注意：worker_aio_requests 参数只有在 Nginx 编译时启用了异步 I/O 支持（--with-file-aio）才会生效。
+    */
     { ngx_string("worker_aio_requests"),
       NGX_EVENT_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_num_slot,
@@ -175,7 +189,7 @@ static ngx_command_t  ngx_epoll_commands[] = {
       ngx_null_command
 };
 
-
+// epoll模块上下文(用于分配配置项存储空间、事件处理等)
 static ngx_event_module_t  ngx_epoll_module_ctx = {
     &epoll_name,
     ngx_epoll_create_conf,               /* create configuration */
@@ -198,7 +212,7 @@ static ngx_event_module_t  ngx_epoll_module_ctx = {
         ngx_epoll_done,                  /* done the events */
     }
 };
-
+// epoll模块配置
 ngx_module_t  ngx_epoll_module = {
     NGX_MODULE_V1,
     &ngx_epoll_module_ctx,               /* module context */
@@ -839,11 +853,12 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
     }
 
     for (i = 0; i < events; i++) {
+        // 从事件列表中获取一个事件，并从事件的数据指针中获取一个ngx_connection_t类型的连接对象c
         c = event_list[i].data.ptr;
-
+        // 通过位运算获取连接对象的instance值，并将c指针还原为原始指针
         instance = (uintptr_t) c & 1;
         c = (ngx_connection_t *) ((uintptr_t) c & (uintptr_t) ~1);
-
+        // 获取连接对象的读事件rev
         rev = c->read;
 
         if (c->fd == -1 || rev->instance != instance) {
@@ -858,12 +873,14 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
             continue;
         }
 
-        revents = event_list[i].events; // epoll就绪事件列表
+        revents = event_list[i].events; // epoll事件类型
 
         ngx_log_debug3(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                        "epoll: fd:%d ev:%04XD d:%p",
                        c->fd, revents, event_list[i].data.ptr);
-
+        /* EPOLLERR：表示对应的文件描述符发生错误
+         * EPOLLHUP：表示对应的文件描述符被挂起
+         * */
         if (revents & (EPOLLERR|EPOLLHUP)) {
             ngx_log_debug2(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
                            "epoll_wait() error on fd:%d ev:%04XD",
@@ -1026,7 +1043,12 @@ ngx_epoll_eventfd_handler(ngx_event_t *ev)
 
 #endif
 
-
+/**
+  * @brief   创建配置存储空间
+  * @note    None
+  * @param   None
+  * @retval  None
+  **/
 static void *
 ngx_epoll_create_conf(ngx_cycle_t *cycle)
 {
@@ -1043,7 +1065,12 @@ ngx_epoll_create_conf(ngx_cycle_t *cycle)
     return epcf;
 }
 
-
+/**
+  * @brief   初始化配置
+  * @note    None
+  * @param   None
+  * @retval  None
+  **/
 static char *
 ngx_epoll_init_conf(ngx_cycle_t *cycle, void *conf)
 {
