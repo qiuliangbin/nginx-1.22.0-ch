@@ -107,7 +107,7 @@ struct ngx_command_s {
         conf：这个变量只在NGX_HTTP_MODULE类型模块的ngx_command_t使用，指定当前配置项存储的内存位置。
         实际上是使用哪个内存池的问题。因为http模块对所有该模块要保存的信息划分了main、server、location三个地方进行存储，
         每个地方都有一个内存池用来分配存储这些信息的内存。这里可能的取值为：
-            GX_HTTP_MAIN_CONF_OFFSET、NGX_HTTP_SRV_CONF_OFFSET或NGX_HTTP_LOC_CONF_OFFSET
+            NGX_HTTP_MAIN_CONF_OFFSET、NGX_HTTP_SRV_CONF_OFFSET或NGX_HTTP_LOC_CONF_OFFSET
     */
     ngx_uint_t            conf;
     // 表示当前配置项在整个存储配置项的结构体中的偏移位置

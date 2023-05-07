@@ -164,7 +164,7 @@ struct ngx_event_aio_s {
 
 #endif
 
-
+/* 对socket_fd事件处理函数进行统一封装. 对epoll、kqueue、poll、select等实现的抽象 */
 typedef struct {
     ngx_int_t  (*add)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
     ngx_int_t  (*del)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
@@ -449,10 +449,18 @@ typedef struct {
 
 typedef struct {
     ngx_str_t              *name;
-
+    /* *
+     * 创建初始化配置所关联的结构体,Nginx在启动时调用此函数,并把创建好的结构体存入
+     * cycle->conf_ctx数组中
+     * */
     void                 *(*create_conf)(ngx_cycle_t *cycle);
+    /* *
+     * 对cycle->conf_ctx数组中某个模块的配置项进行赋值,与create_conf区别是前者
+     * 是申请配置关联结构体所需的内存,init_conf则是赋值默认值
+     *
+     * */
     char                 *(*init_conf)(ngx_cycle_t *cycle, void *conf);
-
+    /* 事件处理函数集合 */
     ngx_event_actions_t     actions;
 } ngx_event_module_t;
 

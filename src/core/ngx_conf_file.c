@@ -324,7 +324,7 @@ ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
             goto failed;
         }
 
-
+        // 根据token从各个core_module中找到其对应的cmd
         rc = ngx_conf_handler(cf, rc);
 
         if (rc == NGX_ERROR) {
@@ -370,7 +370,7 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
     ngx_str_t      *name;
     ngx_command_t  *cmd;
 
-    name = cf->args->elts;
+    name = cf->args->elts; //指令名称 例如mutex_accept
 
     found = 0;
 
@@ -384,10 +384,12 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
         for ( /* void */ ; cmd->name.len; cmd++) {
 
             if (name->len != cmd->name.len) {
+                // 长度不匹配
                 continue;
             }
 
             if (ngx_strcmp(name->data, cmd->name.data) != 0) {
+                // 内容不匹配
                 continue;
             }
 
@@ -424,29 +426,29 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
             if (!(cmd->type & NGX_CONF_ANY)) {
 
                 if (cmd->type & NGX_CONF_FLAG) {
-
+                    // bool类型检测,为on或者off
                     if (cf->args->nelts != 2) {
                         goto invalid;
                     }
 
                 } else if (cmd->type & NGX_CONF_1MORE) {
-
+                    // 只接受1个参数
                     if (cf->args->nelts < 2) {
                         goto invalid;
                     }
 
                 } else if (cmd->type & NGX_CONF_2MORE) {
-
+                    // 只接受2个参数
                     if (cf->args->nelts < 3) {
                         goto invalid;
                     }
 
                 } else if (cf->args->nelts > NGX_CONF_MAX_ARGS) {
-
+                    // 最多接受8个参数
                     goto invalid;
 
                 } else if (!(cmd->type & argument_number[cf->args->nelts - 1]))
-                {
+                {   //参数数量类型校验
                     goto invalid;
                 }
             }
