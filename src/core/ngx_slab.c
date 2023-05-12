@@ -128,12 +128,12 @@ ngx_slab_init(ngx_slab_pool_t *pool)
         slots[i].next = &slots[i];
         slots[i].prev = 0;
     }
-
+    // ngx_slab_pool_t | n*ngx_slab_page_t
     p += n * sizeof(ngx_slab_page_t);
 
     pool->stats = (ngx_slab_stat_t *) p;
     ngx_memzero(pool->stats, n * sizeof(ngx_slab_stat_t));
-
+    // ngx_slab_pool_t | n * ngx_slab_page_t | n * ngx_slab_stat_t
     p += n * sizeof(ngx_slab_stat_t);
 
     size -= n * (sizeof(ngx_slab_page_t) + sizeof(ngx_slab_stat_t));
