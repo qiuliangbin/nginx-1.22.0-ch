@@ -13,14 +13,26 @@
  * The red-black tree code is based on the algorithm described in
  * the "Introduction to Algorithms" by Cormen, Leiserson and Rivest.
  */
-
+/*
+红黑树的特质:
+    1 节点是红色或黑色；
+    2 根节点是黑色；
+    3 所有叶子节点都是黑色节点(NULL)；
+    4 每个红色节点必须有两个黑色的子节点（如果叶子结点是红色，那么我的黑色结点可以不画出来）。
+ (从每个叶子到根的所有路径上不能有两个连续的红色节点)
+    5 从任一节点到其每个叶子的所有简单路径都包含相同数目的黑色节点
+*/
 
 static ngx_inline void ngx_rbtree_left_rotate(ngx_rbtree_node_t **root,
-    ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node);
+    ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node); // 左旋
 static ngx_inline void ngx_rbtree_right_rotate(ngx_rbtree_node_t **root,
-    ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node);
+    ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node); // 右旋
 
-
+/*  红黑树的插入新节点,步骤如下:
+ *      1) 首先按照二叉搜索树的插入操作插入新节点
+ *      2) 把新节点着色为红色(特质5)
+ *      3) 为维持红黑树的特质,调整红黑树的节点(着色&旋转),使其满足红黑树特质
+ * */
 void
 ngx_rbtree_insert(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
 {
@@ -30,21 +42,21 @@ ngx_rbtree_insert(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
 
     root = &tree->root;
     sentinel = tree->sentinel;
-
-    if (*root == sentinel) {
-        node->parent = NULL;
-        node->left = sentinel;
-        node->right = sentinel;
-        ngx_rbt_black(node);
-        *root = node;
+    // 空树,那么插入的节点变成根节点,伴随着左右子节点变成哨兵节点
+    if (*root == sentinel) { // 特殊判定,如果根是哨兵,则树是空的
+        node->parent = NULL;    // 新插入的节点变成根节点
+        node->left = sentinel;  // 新节点的左子节点变为哨兵
+        node->right = sentinel; // 新节点的右子节点变为哨兵
+        ngx_rbt_black(node);    // 新根节点着色为黑色(特质2)
+        *root = node; //确认新结点为新根
 
         return;
     }
 
-    tree->insert(*root, node, sentinel);
+    tree->insert(*root, node, sentinel); // 插入操作(通过这个函数指针的调用就能找到我们的插入点了)
 
     /* re-balance tree */
-
+    // 如果新结点不是根结点而且其父结点是红的，循环
     while (node != *root && ngx_rbt_is_red(node->parent)) {
 
         if (node->parent == node->parent->parent->left) {
