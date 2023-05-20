@@ -2,9 +2,66 @@
 // Created by Administrator on 2023/5/18.
 //
 
-#include "ngx_http_hello_world_module.h"
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
 
-static ngx_int_t ngx_http_hello_world_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data) {
+typedef struct {
+    ngx_shm_zone_t *shm_zone;
+} ngx_http_hello_world_loc_conf_t;
+
+typedef struct {
+    int count;
+} ngx_http_hello_world_shm_count_t;
+
+static char *ngx_http_hello_world(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+
+static void *ngx_http_hello_world_create_loc_conf(ngx_conf_t *cf);
+
+static char *ngx_http_hello_world_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child);
+
+static ngx_int_t ngx_http_hello_world_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data);
+
+static ngx_command_t ngx_http_hello_world_commands[] = {
+        {
+                ngx_string("hello_world"), //The command name
+                NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
+                ngx_http_hello_world, //The command handler
+                NGX_HTTP_LOC_CONF_OFFSET,
+                offsetof(ngx_http_hello_world_loc_conf_t, shm_zone),
+                NULL
+        },
+        ngx_null_command
+};
+
+static ngx_http_module_t ngx_http_hello_world_module_ctx = {
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        ngx_http_hello_world_create_loc_conf,
+        ngx_http_hello_world_merge_loc_conf
+};
+
+ngx_module_t ngx_http_hello_world_module = {
+        NGX_MODULE_V1,
+        &ngx_http_hello_world_module_ctx,
+        ngx_http_hello_world_commands,
+        NGX_HTTP_MODULE,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NGX_MODULE_V1_PADDING
+};
+
+static ngx_int_t
+ngx_http_hello_world_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data) {
     ngx_slab_pool_t *shpool;
     ngx_http_hello_world_shm_count_t *shm_count;
     if (data) {
@@ -19,7 +76,8 @@ static ngx_int_t ngx_http_hello_world_init_shm_zone(ngx_shm_zone_t *shm_zone, vo
 }
 
 
-static ngx_int_t ngx_http_hello_world_handler(ngx_http_request_t *r) {
+static ngx_int_t
+ngx_http_hello_world_handler(ngx_http_request_t *r) {
     ngx_http_hello_world_loc_conf_t *lccf;
     ngx_shm_zone_t *shm_zone;
     int count;
@@ -66,7 +124,8 @@ static ngx_int_t ngx_http_hello_world_handler(ngx_http_request_t *r) {
     return ngx_http_output_filter(r, &out);
 }
 
-static char *ngx_http_hello_world(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+static char *
+ngx_http_hello_world(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_http_core_loc_conf_t *clcf;
 
     clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
@@ -76,7 +135,8 @@ static char *ngx_http_hello_world(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     return NGX_CONF_OK;
 }
 
-static void *ngx_http_hello_world_create_loc_conf(ngx_conf_t *cf) {
+static void *
+ngx_http_hello_world_create_loc_conf(ngx_conf_t *cf) {
     ngx_http_hello_world_loc_conf_t *conf;
 
     conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_hello_world_loc_conf_t));
@@ -86,7 +146,8 @@ static void *ngx_http_hello_world_create_loc_conf(ngx_conf_t *cf) {
     return conf;
 }
 
-static char *ngx_http_hello_world_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
+static char *
+ngx_http_hello_world_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_shm_zone_t *shm_zone;
     ngx_str_t *shm_name;
     ngx_http_hello_world_loc_conf_t *prev = parent;
