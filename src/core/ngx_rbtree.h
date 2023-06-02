@@ -31,7 +31,7 @@ struct ngx_rbtree_node_s {
 
 typedef struct ngx_rbtree_s  ngx_rbtree_t;
 
-//插入函数指针。可以调用ngx_rbtree_insert_value(作用是找到合适的插入点)
+//插入红黑树的函数指针。可以调用ngx_rbtree_insert_value(作用是找到合适的插入点)
 typedef void (*ngx_rbtree_insert_pt) (ngx_rbtree_node_t *root,
     ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
 
@@ -46,26 +46,30 @@ struct ngx_rbtree_s {
 /* 初始化红黑树，即为空的红黑树 */
 /* tree 是指向红黑树的指针，
  * s 是红黑树的一个NIL节点，表示无值，任何变量在没有被赋值之前的值都为nil。
- * i 表示函数指针，决定节点是新增还是替换
+ * i 表示insert函数指针，决定节点是新增还是替换
+ * insert函数指针的赋值实现了多态,常用的是ngx_rbtree_insert_value、ngx_rbtree_insert_timer_value
  */
 #define ngx_rbtree_init(tree, s, i)                                           \
     ngx_rbtree_sentinel_init(s);                                              \
     (tree)->root = s;                                                         \
     (tree)->sentinel = s;                                                     \
-    (tree)->insert = i  // 这里insert函数指针的赋值实现了多态
+    (tree)->insert = i
 
 #define ngx_rbtree_data(node, type, link)                                     \
     (type *) ((u_char *) (node) - offsetof(type, link))
 
-
+// 向红黑树插入一个节点，插入后旋转红黑树，保持平衡
 void ngx_rbtree_insert(ngx_rbtree_t *tree, ngx_rbtree_node_t *node);
+// 在红黑树里删除一个节点
 void ngx_rbtree_delete(ngx_rbtree_t *tree, ngx_rbtree_node_t *node);
+// 普通红黑树插入函数
 void ngx_rbtree_insert_value(ngx_rbtree_node_t *root, ngx_rbtree_node_t *node,
     ngx_rbtree_node_t *sentinel);
-// ngx_rbtree_insert_timer_value函数跟ngx_rbtree_insert_value函数唯一区别就是判断大小时，
-// 采用了两个值相减，避免溢出
+// ngx_rbtree_insert_timer_value函数跟ngx_rbtree_insert_value函数唯一区别就是判断大小时，采用了两个值相减，避免溢出
+// 定时器红黑树专用插入函数
 void ngx_rbtree_insert_timer_value(ngx_rbtree_node_t *root,
     ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
+// 查找下一个节点，可以用来遍历红黑树
 ngx_rbtree_node_t *ngx_rbtree_next(ngx_rbtree_t *tree,
     ngx_rbtree_node_t *node);
 
@@ -81,8 +85,7 @@ ngx_rbtree_node_t *ngx_rbtree_next(ngx_rbtree_t *tree,
 
 
 /* a sentinel must be black */
-/* 节点着黑色的宏定义 */
-
+/* 哨兵节点颜色必须是黑色 */
 #define ngx_rbtree_sentinel_init(node)  ngx_rbt_black(node)
 
 /* 寻找红黑树的最小值 */

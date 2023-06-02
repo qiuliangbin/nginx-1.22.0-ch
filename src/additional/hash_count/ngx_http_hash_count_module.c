@@ -54,11 +54,11 @@ static ngx_http_module_t ngx_http_hash_count_module_ctx = {
 
 static ngx_command_t ngx_http_hash_count_commands[] = {
 		{
-				ngx_string("hash_count"),
-				NGX_HTTP_LOC_CONF | NGX_CONF_NOARGS,
-				ngx_http_hash_count,
-				NGX_HTTP_LOC_CONF_OFFSET,
-				0,
+				ngx_string("hash_count"), // 指令的名称
+				NGX_HTTP_LOC_CONF | NGX_CONF_NOARGS, // 指令的作用域和类型
+				ngx_http_hash_count, // 解析指令的函数指针
+				NGX_HTTP_LOC_CONF_OFFSET, // 数据的存储位置
+				0, // 数据具体存储变量
 				NULL
 		},
 		ngx_null_command

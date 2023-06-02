@@ -24,7 +24,7 @@ static ngx_int_t ngx_http_hello_world_init_shm_zone(ngx_shm_zone_t *shm_zone, vo
 
 static ngx_command_t ngx_http_hello_world_commands[] = {
 		{
-				ngx_string("hello_world"), //The command name
+				ngx_string("hello_world"), // The command name
 				NGX_HTTP_LOC_CONF | NGX_CONF_NOARGS,
 				ngx_http_hello_world, //The command handler
 				NGX_HTTP_LOC_CONF_OFFSET,
