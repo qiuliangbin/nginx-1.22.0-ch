@@ -144,6 +144,12 @@ ngx_http_hash_count_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data) {
 	return NGX_OK;
 }
 
+/**
+  * @brief   handler依次做4件事情: 获取location配置、生成合适的响应、发送响应的header头部、发送响应的body包体
+  * @note    原型函数指针: typedef ngx_int_t (*ngx_http_handler_pt)(ngx_http_request_t *r);
+  * @param   r:  request结构和自定义的module模块的组合体
+  * @retval  None
+  **/
 static ngx_int_t
 ngx_http_hash_count_loc_handler(ngx_http_request_t *r) //ngx_http_empty_gif_handler
 {

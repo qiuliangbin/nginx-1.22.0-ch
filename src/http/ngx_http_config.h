@@ -21,17 +21,27 @@ typedef struct {
 } ngx_http_conf_ctx_t;
 
 
-typedef struct {
+typedef struct { /* 可以把不需要调用的函数指针设置为 NULL */
+    /* 解析配置文件之前被调用 */
     ngx_int_t   (*preconfiguration)(ngx_conf_t *cf);
+    /* 完成配置文件的解析后被调用 */
     ngx_int_t   (*postconfiguration)(ngx_conf_t *cf);
+    /* 创建存储main级别的全局配置项的结构体（直属于http块） */
 
     void       *(*create_main_conf)(ngx_conf_t *cf);
+    /* 初始化main级别的配置项 */
     char       *(*init_main_conf)(ngx_conf_t *cf, void *conf);
 
+    /* 创建存储srv级别的配置项的结构体（直属于server块） */
     void       *(*create_srv_conf)(ngx_conf_t *cf);
+    /* 合并main级别与srv级别下的同名配置项 */
     char       *(*merge_srv_conf)(ngx_conf_t *cf, void *prev, void *conf);
 
+    /* 创建存储loc级别的配置项的结构体（直属于location块） */
     void       *(*create_loc_conf)(ngx_conf_t *cf);
+    /* 合并srv级别与loc级别下的同名配置项 */
+    /* 作用是将 prev 和 conf 中的 uint 类型的值进行合并，如果 prev 的值为 NGX_CONF_UNSET_UINT，
+     * 则将 conf 的值赋给 prev；否则，将 prev 和 conf 中的值进行比较，取较大的值赋给 prev */
     char       *(*merge_loc_conf)(ngx_conf_t *cf, void *prev, void *conf);
 } ngx_http_module_t;
 

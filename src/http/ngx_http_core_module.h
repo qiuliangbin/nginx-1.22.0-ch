@@ -103,25 +103,37 @@ typedef struct {
 #endif
 } ngx_http_listen_opt_t;
 
-
+/*
+一般情况下，我们自定义的模块，大多数是挂载在NGX_HTTP_CONTENT_PHASE阶段的。
+挂载的动作一般是在模块上下文调用的postconfiguration 函数中。
+注意：有几个阶段是特例，它不调用挂载任何的Handler，也就是你就不用挂载到这几个阶段了：
+    NGX_HTTP_FIND_CONFIG_PHASE
+    NGX_HTTP_POST_ACCESS_PHASE
+    NGX_HTTP_POST_REWRITE_PHASE
+    NGX_HTTP_TRY_FILES_PHASE
+ */
 typedef enum {
+    /* 读取请求内容阶段 */
     NGX_HTTP_POST_READ_PHASE = 0,
-
+    /* Server请求地址重写阶段 */
     NGX_HTTP_SERVER_REWRITE_PHASE,
-
+    /* 配置查找阶段: */
     NGX_HTTP_FIND_CONFIG_PHASE,
+    /* Location请求地址重写阶段 */
     NGX_HTTP_REWRITE_PHASE,
+    /* 请求地址重写提交阶段 */
     NGX_HTTP_POST_REWRITE_PHASE,
-
+    /* 访问权限检查准备阶段 */
     NGX_HTTP_PREACCESS_PHASE,
-
+    /* 访问权限检查阶段 */
     NGX_HTTP_ACCESS_PHASE,
+    /* 访问权限检查提交阶段 */
     NGX_HTTP_POST_ACCESS_PHASE,
-
+    /* 配置项try_files处理阶段 */
     NGX_HTTP_PRECONTENT_PHASE,
-
-    NGX_HTTP_CONTENT_PHASE,
-
+    /* 内容产生阶段 */
+    NGX_HTTP_CONTENT_PHASE, // 自定义的模块，大多数是挂载在NGX_HTTP_CONTENT_PHASE阶段的
+    /* 日志模块处理阶段 */
     NGX_HTTP_LOG_PHASE
 } ngx_http_phases;
 
@@ -511,8 +523,11 @@ ngx_int_t ngx_http_named_location(ngx_http_request_t *r, ngx_str_t *name);
 
 ngx_http_cleanup_t *ngx_http_cleanup_add(ngx_http_request_t *r, size_t size);
 
+/* Filter处理由Handler模块产生的响应，即仅处理由服务器发往客户端的HTTP响应，并不处理由客户端发往服务器的HTTP请求 */
 
+/* 过滤头部（Header Filter） */
 typedef ngx_int_t (*ngx_http_output_header_filter_pt)(ngx_http_request_t *r);
+/* 过滤包体（Body Filter ）,其中参数 r 是当前的请求，chain 是待发送的 HTTP  响应包体 */
 typedef ngx_int_t (*ngx_http_output_body_filter_pt)
     (ngx_http_request_t *r, ngx_chain_t *chain);
 typedef ngx_int_t (*ngx_http_request_body_filter_pt)

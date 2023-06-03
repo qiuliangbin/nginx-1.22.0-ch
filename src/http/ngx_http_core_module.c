@@ -1827,7 +1827,12 @@ ngx_http_send_response(ngx_http_request_t *r, ngx_uint_t status,
     return ngx_http_output_filter(r, &out);
 }
 
-
+/**
+  * @brief   发送 HTTP 响应头部
+  * @note    None
+  * @param   r: 当前的请求
+  * @retval  None
+  **/
 ngx_int_t
 ngx_http_send_header(ngx_http_request_t *r)
 {
@@ -1845,11 +1850,16 @@ ngx_http_send_header(ngx_http_request_t *r)
         r->headers_out.status = r->err_status;
         r->headers_out.status_line.len = 0;
     }
-
+    // HTTP Filter过滤模块组成的链表的入口
     return ngx_http_top_header_filter(r);
 }
 
-
+/**
+  * @brief   发送HTTP响应包体
+  * @note    None
+  * @param   r: 当前的请求; in: 待发送的HTTP响应包体
+  * @retval  None
+  **/
 ngx_int_t
 ngx_http_output_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {
@@ -1860,7 +1870,8 @@ ngx_http_output_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c->log, 0,
                    "http output filter \"%V?%V\"", &r->uri, &r->args);
-
+    // 当执行发送 HTTP 头部或 HTTP 响应包体时，HTTP 框架是从ngx_http_top_header_filter
+    // 和 ngx_http_top_body_filter 开始遍历 HTTP 头部过滤模块和 HTTP 包体过来模块
     rc = ngx_http_top_body_filter(r, in);
 
     if (rc == NGX_ERROR) {

@@ -54,6 +54,7 @@ static ngx_http_output_header_filter_pt  ngx_http_next_header_filter;
 static ngx_int_t
 ngx_http_not_modified_header_filter(ngx_http_request_t *r)
 {
+    /* 1.决定是否处理响应 */
     if (r->headers_out.status != NGX_HTTP_OK
         || r != r->main
         || r->disable_not_modified)
@@ -90,7 +91,7 @@ ngx_http_not_modified_header_filter(ngx_http_request_t *r)
         }
 
         /* not modified */
-
+        /* 2.对响应进行处理 */
         r->headers_out.status = NGX_HTTP_NOT_MODIFIED;
         r->headers_out.status_line.len = 0;
         r->headers_out.content_type.len = 0;
@@ -101,7 +102,7 @@ ngx_http_not_modified_header_filter(ngx_http_request_t *r)
             r->headers_out.content_encoding->hash = 0;
             r->headers_out.content_encoding = NULL;
         }
-
+        /* 调用下一个 filter */
         return ngx_http_next_header_filter(r);
     }
 
