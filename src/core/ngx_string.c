@@ -1958,32 +1958,40 @@ ngx_escape_json(u_char *dst, u_char *src, size_t size)
     return (uintptr_t) dst;
 }
 
-
+/**
+  * @brief   基于ngx_str_node_t的字符串红黑树插入操作
+  * @note    None
+  * @param   temp       红黑树的待插入节点
+  * @param   node       红黑树的根节点
+  * @param   sentinel   红黑树的哨兵节点
+  * @retval  None
+  **/
 void
 ngx_str_rbtree_insert_value(ngx_rbtree_node_t *temp,
     ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel)
 {
     ngx_str_node_t      *n, *t;
     ngx_rbtree_node_t  **p;
-
+    // 循环遍历,确定最终的待插入节点的父节点
     for ( ;; ) {
 
         n = (ngx_str_node_t *) node;
         t = (ngx_str_node_t *) temp;
 
         if (node->key != temp->key) {
-
+            // 先比较 key，如果不同则根据key来决定
             p = (node->key < temp->key) ? &temp->left : &temp->right;
 
         } else if (n->str.len != t->str.len) {
-
+            // 如果 key 相同，则根据字符串长度
             p = (n->str.len < t->str.len) ? &temp->left : &temp->right;
 
         } else {
+            // 如果连字符串长度也相同，那么利用 mem_cmp 来比较大小
             p = (ngx_memcmp(n->str.data, t->str.data, n->str.len) < 0)
                  ? &temp->left : &temp->right;
         }
-
+        // 找到插入节点, 退出查找过程
         if (*p == sentinel) {
             break;
         }
@@ -1991,14 +1999,19 @@ ngx_str_rbtree_insert_value(ngx_rbtree_node_t *temp,
         temp = *p;
     }
 
-    *p = node;
-    node->parent = temp;
-    node->left = sentinel;
-    node->right = sentinel;
-    ngx_rbt_red(node);
+    *p = node; // 插入节点地址进行赋值
+    node->parent = temp; // 插入节点的的父节点赋值
+    node->left = sentinel; // 插入节点的的左子节点赋值
+    node->right = sentinel; // 插入节点的的右子节点赋值
+    ngx_rbt_red(node); // 插入节点的染色成红色
 }
 
-
+/**
+  * @brief   基于ngx_str_node_t的字符串红黑树查找操作
+  * @note    None
+  * @param   rbtree: 红黑树; val: 查找的特定字符串值; hash: 经过murmurhash计算的key值
+  * @retval  None
+  **/
 ngx_str_node_t *
 ngx_str_rbtree_lookup(ngx_rbtree_t *rbtree, ngx_str_t *val, uint32_t hash)
 {

@@ -1,4 +1,4 @@
-#define NGX_CONFIGURE " --with-http_auth_request_module --with-http_realip_module --with-http_v2_module --with-debug --with-http_random_index_module --with-http_sub_module --with-http_addition_module --with-http_secure_link_module --with-http_geoip_module --with-http_ssl_module --with-stream_ssl_module --with-stream_realip_module --with-stream_ssl_preread_module --with-stream --with-http_slice_module --with-google_perftools_module --with-threads --with-http_gzip_static_module --with-http_gunzip_module --with-http_stub_status_module"
+#define NGX_CONFIGURE " --with-debug --with-cc-opt='-g -O0' --with-stream --prefix=/home/qiulb/debug/nginx-1.22.0-ch/objs --add-dynamic-module=/home/qiulb/debug/nginx-1.22.0-ch/src/additional/hash_count"
 
 #ifndef NGX_DEBUG
 #define NGX_DEBUG  1
@@ -363,11 +363,6 @@
 #endif
 
 
-#ifndef NGX_THREADS
-#define NGX_THREADS  1
-#endif
-
-
 #ifndef NGX_HTTP_CACHE
 #define NGX_HTTP_CACHE  1
 #endif
@@ -383,53 +378,13 @@
 #endif
 
 
-#ifndef NGX_HTTP_GZIP
-#define NGX_HTTP_GZIP  1
-#endif
-
-
-#ifndef NGX_HTTP_V2
-#define NGX_HTTP_V2  1
-#endif
-
-
-#ifndef NGX_HTTP_HEADERS
-#define NGX_HTTP_HEADERS  1
-#endif
-
-
-#ifndef NGX_HTTP_GZIP
-#define NGX_HTTP_GZIP  1
-#endif
-
-
 #ifndef NGX_CRYPT
 #define NGX_CRYPT  1
 #endif
 
 
-#ifndef NGX_HTTP_REALIP
-#define NGX_HTTP_REALIP  1
-#endif
-
-
 #ifndef NGX_HTTP_X_FORWARDED_FOR
 #define NGX_HTTP_X_FORWARDED_FOR  1
-#endif
-
-
-#ifndef NGX_HTTP_X_FORWARDED_FOR
-#define NGX_HTTP_X_FORWARDED_FOR  1
-#endif
-
-
-#ifndef NGX_HTTP_X_FORWARDED_FOR
-#define NGX_HTTP_X_FORWARDED_FOR  1
-#endif
-
-
-#ifndef NGX_HTTP_SSL
-#define NGX_HTTP_SSL  1
 #endif
 
 
@@ -440,16 +395,6 @@
 
 #ifndef NGX_HTTP_UPSTREAM_ZONE
 #define NGX_HTTP_UPSTREAM_ZONE  1
-#endif
-
-
-#ifndef NGX_STAT_STUB
-#define NGX_STAT_STUB  1
-#endif
-
-
-#ifndef NGX_STREAM_SSL
-#define NGX_STREAM_SSL  1
 #endif
 
 
@@ -468,28 +413,13 @@
 #endif
 
 
-#ifndef NGX_OPENSSL
-#define NGX_OPENSSL  1
-#endif
-
-
-#ifndef NGX_SSL
-#define NGX_SSL  1
-#endif
-
-
 #ifndef NGX_ZLIB
 #define NGX_ZLIB  1
 #endif
 
 
-#ifndef NGX_HAVE_GEOIP_V6
-#define NGX_HAVE_GEOIP_V6  1
-#endif
-
-
 #ifndef NGX_PREFIX
-#define NGX_PREFIX  "/usr/local/nginx/"
+#define NGX_PREFIX  "/home/qiulb/debug/nginx-1.22.0-ch/objs/"
 #endif
 
 

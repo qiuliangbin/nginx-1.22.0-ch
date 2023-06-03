@@ -19,7 +19,7 @@ typedef struct ngx_buf_s  ngx_buf_t;
 
 struct ngx_buf_s {
     u_char          *pos; // 距离缓存开始位置的偏移量
-    u_char          *last; // 当buf指向的数据在内存中的时候， pos指向的是这段数据的结束位置
+    u_char          *last; // 当buf指向的数据在内存中的时候, pos指向的是这段数据的结束位置
     off_t            file_pos; // 文件距离开始位置的偏移量
     off_t            file_last; // 文件结束位置
     /*
@@ -29,8 +29,8 @@ struct ngx_buf_s {
     */
     u_char          *start;         /* start of buffer */
     u_char          *end;           /* end of buffer */
-    ngx_buf_tag_t    tag; // 实际上是一个void *类型的指针，使用者可以关联任意的对象上去，只要对使用者有意义
-    ngx_file_t      *file; // 当buf所包含的内容在文件时，file字段指向对应的文件对象
+    ngx_buf_tag_t    tag; // buffer属于哪个模块的标志, 实际上是一个void *类型的指针，使用者可以关联任意的对象上去，只要对使用者有意义
+    ngx_file_t      *file; // buffer引用的文件,当buf所包含的内容在文件时，file字段指向对应的文件对象
     /*
     当这个buf完整copy了另外一个buf的所有字段的时候，那么这两个buf实际指向的是同一块内存，或是同一个文件的同一部分，
     此时这两个buf的shadow字段都是指向对方的。那么对于这样的两个buf，在释放的时候，就需要使用者特别小心，
@@ -44,7 +44,7 @@ struct ngx_buf_s {
     再次建立一个ngx_buf_t结构体指向原内存，这样多个ngx_buf_t结构体指向了同一块内存，它们之间的关系就通过
     shadow成员来引用，这种设计过于复杂，通常不建议使用。
     */
-    ngx_buf_t       *shadow;
+    ngx_buf_t       *shadow;    /* 用来引用替换过后的buffer，以便当所有buffer输出以后，这个影子buffer可以被释放。*/
 
 
     /* the buf's content could be changed */
@@ -63,25 +63,25 @@ struct ngx_buf_s {
     unsigned         mmap:1;
     // 可以回收的。也就是这个buf是可以被释放的。这个字段通常是配合shadow字段一起使用的，
     // 对于使用ngx_create_temp_buf()函数所创建的buf，并且是另外一个buf的shadow，那么使用这个字段来标示这个buf是可以释放的
-    unsigned         recycled:1;
+    unsigned         recycled:1; /* 内存可以被输出并回收 */
     // 为1时表示该buf所包含的内容是在文件中
-    unsigned         in_file:1;
+    unsigned         in_file:1; /* buffer的内容在文件中 */
     // 遇到有flush字段被设置为1的buf chain，则该chain的数据即便不是最后结束的数据(last_buf被设置，
     // 标示所有要输出的内容都完了），也会进行输出，不会受postpone_output配置的限制，但是会受到发送速率等其他条件的限制
-    unsigned         flush:1;
+    unsigned         flush:1; /* 马上全部输出buffer的内容, gzip模块里面用得比较多 */
     // 为1时表示可以对该buf进行同步操作，容易引起堵塞
-    unsigned         sync:1;
+    unsigned         sync:1;  /* 基本上是一段输出链的最后一个buffer带的标志，标示可以输出，有些零长度的buffer也可以置该标志*/
     // 数据被以多个chain传递给了过滤器，此字段为1表示这是缓冲区链表ngx_chain_t上最后一块待处理的缓冲区
-    unsigned         last_buf:1;
+    unsigned         last_buf:1; /* 所有请求里面最后一块buffer，包含子请求 */
     // 在当前的chain里面，此buf是最后一个。特别要注意的是标志为last_in_chain的buf并不一定是last_buf，
     // 但是标志为last_buf的buf则一定是last_in_chain的。这是因为数据会被以多个chain传递给某个filter模块
-    unsigned         last_in_chain:1;
+    unsigned         last_in_chain:1;  /* 当前请求输出链的最后一块buffer */
     // 在创建一个buf的shadow的时候，通常将新创建的一个buf的last_shadow置为1，表示为最后一个影子缓冲区
-    unsigned         last_shadow:1;
+    unsigned         last_shadow:1; /* shadow链里面的最后buffer，可以释放buffer了 */
     // 由于受内存使用的限制，有时候一些buf的内容需要被写到磁盘上的临时文件中去，那么这时就设置此标志
-    unsigned         temp_file:1;
+    unsigned         temp_file:1; /* 是否是暂存文件 */
 
-    /* STUB */ int   num;
+    /* STUB */ int   num; /* 统计用，表示使用次数 */
 };
 
 // 数据结构形成一个nginx buf链

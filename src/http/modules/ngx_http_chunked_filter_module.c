@@ -122,7 +122,7 @@ ngx_http_chunked_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     size = 0;
     cl = in;
-
+    /* 1.组装输出的缓冲区，并计算缓冲区的大小 */
     for ( ;; ) {
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                        "http chunk: %O", ngx_buf_size(cl->buf));
@@ -150,7 +150,7 @@ ngx_http_chunked_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
         cl = cl->next;
     }
-
+    /* 2.计算好chunk的size之后，申请一个buffer b，将b插入到输出缓冲区的头部out.buf，完成对一个chunk的封装 */
     if (size) {
         tl = ngx_chain_get_free_buf(r->pool, &ctx->free);
         if (tl == NULL) {

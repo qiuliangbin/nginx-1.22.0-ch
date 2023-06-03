@@ -213,15 +213,17 @@ void ngx_unescape_uri(u_char **dst, u_char **src, size_t size, ngx_uint_t type);
 uintptr_t ngx_escape_html(u_char *dst, u_char *src, size_t size);
 uintptr_t ngx_escape_json(u_char *dst, u_char *src, size_t size);
 
-
+// 用于字符串红黑树的节点定义
 typedef struct {
     ngx_rbtree_node_t         node;
     ngx_str_t                 str;
 } ngx_str_node_t;
 
-
+// 字符串红黑树专用插入函数
 void ngx_str_rbtree_insert_value(ngx_rbtree_node_t *temp,
     ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
+// 字符串红黑树专门的查找函数
+// 注意hash值的类型是uint32_t，所以必须用murmurhash计算，不能用ngx_hash_key
 ngx_str_node_t *ngx_str_rbtree_lookup(ngx_rbtree_t *rbtree, ngx_str_t *name,
     uint32_t hash);
 

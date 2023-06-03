@@ -367,7 +367,11 @@ struct ngx_http_posted_request_s {
     ngx_http_posted_request_t        *next;
 };
 
-
+/* Handler模块处理过程中做了四件事情：
+ * 1.获取location配置
+ * 2.生成合适的响应
+ * 3.发送响应的header头部
+ * 4.发送响应的body包体 */
 typedef ngx_int_t (*ngx_http_handler_pt)(ngx_http_request_t *r);
 typedef void (*ngx_http_event_handler_pt)(ngx_http_request_t *r);
 
@@ -405,13 +409,14 @@ struct ngx_http_request_s {
     time_t                            start_sec;
     ngx_msec_t                        start_msec;
 
-    ngx_uint_t                        method;
-    ngx_uint_t                        http_version;
+    ngx_uint_t                        method; // GET 或者 POST
+    ngx_uint_t                        http_version; // http版本 一般是1.1
 
     ngx_str_t                         request_line;
-    ngx_str_t                         uri;
-    ngx_str_t                         args;
-    ngx_str_t                         exten;
+    // GET方式的请求,举例如下: https://baidu.com/query.cgi?name=john
+    ngx_str_t                         uri; // 是 request 请求的路径,e.g. "/query.cgi".
+    ngx_str_t                         args; // 是请求串参数中问号后面的参数(e.g. "name=john").
+    ngx_str_t                         exten; // 包含有用的stuff，例如：cookies 和browser 信息
     ngx_str_t                         unparsed_uri;
 
     ngx_str_t                         method_name;
