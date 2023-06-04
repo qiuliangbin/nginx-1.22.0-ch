@@ -12,7 +12,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 
-
+// 错误日志级别
 #define NGX_LOG_STDERR            0
 #define NGX_LOG_EMERG             1
 #define NGX_LOG_ALERT             2
@@ -48,15 +48,15 @@ typedef void (*ngx_log_writer_pt) (ngx_log_t *log, ngx_uint_t level,
 
 
 struct ngx_log_s {
-    ngx_uint_t           log_level; //日志级别
-    ngx_open_file_t     *file;//文件信息
+    ngx_uint_t           log_level; // 日志级别
+    ngx_open_file_t     *file;      // 记录日志文件信息
 
-    ngx_atomic_uint_t    connection;
+    ngx_atomic_uint_t    connection; // 引用该日志对象的连接数
 
     time_t               disk_full_time;
 
-    ngx_log_handler_pt   handler;
-    void                *data;
+    ngx_log_handler_pt   handler; // 输出日志时的回调函数，日志等级不为debug时有效
+    void                *data;    // 配合handler成员使用，给handler回调函数传数据
 
     ngx_log_writer_pt    writer;
     void                *wdata;
@@ -67,9 +67,9 @@ struct ngx_log_s {
      * their types all the time
      */
 
-    char                *action;
+    char                *action; // 记录日志前，nginx当前的动作(即正在做什么)
 
-    ngx_log_t           *next;
+    ngx_log_t           *next; // 指向下一个日志对象
 };
 
 

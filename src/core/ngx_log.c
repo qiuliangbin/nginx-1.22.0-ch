@@ -32,7 +32,25 @@ typedef struct {
 
 
 static ngx_command_t  ngx_errlog_commands[] = {
+    /*
+    error_log    <FILE>    <LEVEL>;
+    关键字        日志文件   错误日志级别
 
+    默认： error_log  logs/error.logs   error
+
+    日志有三种输出方式，输出到文件(file)、输出到屏幕(stderr)、输出到syslog(syslog)，以debug_开头的表示输出的调试日志类型。
+    输出日志信息时转入的日志等级大于等于指定的等级时才会输出日志，如：
+
+    error_log  logs/err.logs err
+    所有大于等于err等级的日志信息输出到logs/err.logs文件中，即err、crit、alert、emerg、stderr日志信息被输出。
+    当配置文件中有多条error_log配置项生效时，情况就不一样，如下所示：
+
+    error_log  logs/warn.logs  warn
+    error_log  logs/alert.logs   alert
+    当日志级别大于alert时会同时输出到warn.logs及alert.logs文件中，当日志级别介于alert到warn之间时只输出到warn.logs文件中。
+    当日志级别低于warn时不会输出.
+
+     */
     { ngx_string("error_log"),
       NGX_MAIN_CONF|NGX_CONF_1MORE,
       ngx_error_log,
@@ -217,7 +235,7 @@ ngx_log_error(ngx_uint_t level, ngx_log_t *log, ngx_err_t err,
     const char *fmt, ...)
 {
     va_list  args;
-
+    // 根据日志等级判断是否需要输出
     if (log->log_level >= level) {
         va_start(args, fmt);
         ngx_log_error_core(level, log, err, fmt, args);
@@ -402,14 +420,14 @@ ngx_int_t
 ngx_log_open_default(ngx_cycle_t *cycle)
 {
     ngx_log_t  *log;
-
+    // 获取日志列表中等级最低的日志文件对象
     if (ngx_log_get_file_log(&cycle->new_log) != NULL) {
         return NGX_OK;
     }
 
     if (cycle->new_log.log_level != 0) {
         /* there are some error logs, but no files */
-
+        /* 除了输出到终端的配置文件不需要分配内存外，其他都需要分配日志信息对象内存 */
         log = ngx_pcalloc(cycle->pool, sizeof(ngx_log_t));
         if (log == NULL) {
             return NGX_ERROR;
@@ -419,7 +437,7 @@ ngx_log_open_default(ngx_cycle_t *cycle)
         /* no error logs at all */
         log = &cycle->new_log;
     }
-
+    /* 填充默认日志信息对象信息, level默认设置为NGX_LOG_ERR; 日志文件设置为 logs/error.log */
     log->log_level = NGX_LOG_ERR;
 
     log->file = ngx_conf_open_file(cycle, &cycle->error_log);
@@ -474,13 +492,18 @@ ngx_log_get_file_log(ngx_log_t *head)
     return NULL;
 }
 
-
+/*!
+ * 设置nginx日志级别
+ * @param cf 当前配置项
+ * @param log 日志上下文
+ * @return NGX_CONF_OK: 日志文件配置项检查通过; 否则为NGX_CONF_ERROR,检查不通过
+ */
 static char *
 ngx_log_set_levels(ngx_conf_t *cf, ngx_log_t *log)
 {
     ngx_uint_t   i, n, d, found;
     ngx_str_t   *value;
-
+    /* 日志配置项为: error_log logs/error.log; 那么日志级别默认为error*/
     if (cf->args->nelts == 2) {
         log->log_level = NGX_LOG_ERR;
         return NGX_CONF_OK;
@@ -490,7 +513,7 @@ ngx_log_set_levels(ngx_conf_t *cf, ngx_log_t *log)
 
     for (i = 2; i < cf->args->nelts; i++) {
         found = 0;
-
+        /* 匹配日志等级 */
         for (n = 1; n <= NGX_LOG_DEBUG; n++) {
             if (ngx_strcmp(value[i].data, err_levels[n].data) == 0) {
 
@@ -506,7 +529,7 @@ ngx_log_set_levels(ngx_conf_t *cf, ngx_log_t *log)
                 break;
             }
         }
-
+        /* 匹配debug日志类型 */
         for (n = 0, d = NGX_LOG_DEBUG_FIRST; d <= NGX_LOG_DEBUG_LAST; d <<= 1) {
             if (ngx_strcmp(value[i].data, debug_levels[n++]) == 0) {
                 if (log->log_level & ~NGX_LOG_DEBUG_ALL) {
@@ -522,14 +545,14 @@ ngx_log_set_levels(ngx_conf_t *cf, ngx_log_t *log)
             }
         }
 
-
+        /* 没有找到，该条error_log配置项语法错误 */
         if (!found) {
             ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                                "invalid log level \"%V\"", &value[i]);
             return NGX_CONF_ERROR;
         }
     }
-
+    /* 当日志等级为debug时，将该日志对象的等级置为debug all，表示输出所有debug信息 */
     if (log->log_level == NGX_LOG_DEBUG) {
         log->log_level = NGX_LOG_DEBUG_ALL;
     }
@@ -537,25 +560,36 @@ ngx_log_set_levels(ngx_conf_t *cf, ngx_log_t *log)
     return NGX_CONF_OK;
 }
 
-
+/*!
+ * 在配置文件中每发现一条error_log配置项该函数调用一次
+ * @param cf 当前配置项
+ * @param cmd 命令集
+ * @param conf 当前模块配置项
+ * @return
+ */
 static char *
 ngx_error_log(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     ngx_log_t  *dummy;
-
+    // new_log用于保存优先级最低的日志对象
     dummy = &cf->cycle->new_log;
 
     return ngx_log_set_log(cf, &dummy);
 }
 
-
+/*!
+ *
+ * @param cf
+ * @param head
+ * @return
+ */
 char *
 ngx_log_set_log(ngx_conf_t *cf, ngx_log_t **head)
 {
     ngx_log_t          *new_log;
     ngx_str_t          *value, name;
     ngx_syslog_peer_t  *peer;
-
+    /* 第一次被调用时log_level ==0, 后续被调用时需重新申请日志对象 */
     if (*head != NULL && (*head)->log_level == 0) {
         new_log = *head;
 
@@ -570,9 +604,14 @@ ngx_log_set_log(ngx_conf_t *cf, ngx_log_t **head)
             *head = new_log;
         }
     }
-
+    /* elts保存有error_log配置项参数列表, 例如配置项为： error_log logs/error.log error
+     * 则cf->args->elts存储的数组信息为:
+     *      value[0]="error_log";
+     *      value[1]="logs/error.log";
+     *      value[2]="error";
+     * */
     value = cf->args->elts;
-
+    /* 日志信息输出到终端 */
     if (ngx_strcmp(value[1].data, "stderr") == 0) {
         ngx_str_null(&name);
         cf->cycle->log_use_stderr = 1;
@@ -655,6 +694,7 @@ ngx_log_set_log(ngx_conf_t *cf, ngx_log_t **head)
         new_log->wdata = peer;
 
     } else {
+        /* 分配一个文件对象，如果name文件已打开直接返回该对象，否则重新申请 */
         new_log->file = ngx_conf_open_file(cf->cycle, &value[1]);
         if (new_log->file == NULL) {
             return NGX_CONF_ERROR;
@@ -672,19 +712,23 @@ ngx_log_set_log(ngx_conf_t *cf, ngx_log_t **head)
     return NGX_CONF_OK;
 }
 
-
+/*!
+ * 日志对象队列按日志等级从低到高排序(典型的插入排序算法)
+ * @param log 链表中的某个日志文件对象(一般是头节点)
+ * @param new_log 新的日志文件对象
+ */
 static void
 ngx_log_insert(ngx_log_t *log, ngx_log_t *new_log)
 {
     ngx_log_t  tmp;
-
+    /* log_level值越大,则越靠近链表的前面; */
     if (new_log->log_level > log->log_level) {
 
         /*
          * list head address is permanent, insert new log after
          * head and swap its contents with head
          */
-
+        /* 构造成值大小排序是 head > new_log > log > rear 的链表 */
         tmp = *log;
         *log = *new_log;
         *new_log = tmp;
@@ -692,9 +736,10 @@ ngx_log_insert(ngx_log_t *log, ngx_log_t *new_log)
         log->next = new_log;
         return;
     }
-
+    /* 在列队中找合适的位置，将新对象插入其中 */
     while (log->next) {
         if (new_log->log_level > log->next->log_level) {
+            // 值大小排序是  log >  new_log > log->next
             new_log->next = log->next;
             log->next = new_log;
             return;

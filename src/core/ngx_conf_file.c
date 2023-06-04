@@ -1032,13 +1032,13 @@ ngx_conf_open_file(ngx_cycle_t *cycle, ngx_str_t *name)
             if (full.len != file[i].name.len) {
                 continue;
             }
-
+            // 日志文件名已经存在，则返回该对象
             if (ngx_strcmp(full.data, file[i].name.data) == 0) {
                 return &file[i];
             }
         }
     }
-
+    // ngx_cycle->open_files成员中保存有已经打开的文件对象
     file = ngx_list_push(&cycle->open_files);
     if (file == NULL) {
         return NULL;
