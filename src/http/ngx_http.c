@@ -324,14 +324,14 @@ ngx_http_block(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     *cf = pcf;
 
-
+    // 初始化HTTP处理流程所需的handler函数
     if (ngx_http_init_phase_handlers(cf, cmcf) != NGX_OK) {
         return NGX_CONF_ERROR;
     }
 
 
     /* optimize the lists of ports, addresses and server names */
-
+    // 初始化所有监听端口
     if (ngx_http_optimize_servers(cf, cmcf, cmcf->ports) != NGX_OK) {
         return NGX_CONF_ERROR;
     }
@@ -1185,8 +1185,9 @@ ngx_http_add_listen(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
     ngx_http_core_main_conf_t  *cmcf;
 
     cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
-
+    // ports数组为空
     if (cmcf->ports == NULL) {
+        // posts 存放着该http{}配置块下监听的所有ngx_http_conf_port_t端口
         cmcf->ports = ngx_array_create(cf->temp_pool, 2,
                                        sizeof(ngx_http_conf_port_t));
         if (cmcf->ports == NULL) {
@@ -1195,6 +1196,7 @@ ngx_http_add_listen(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
     }
 
     sa = lsopt->sockaddr;
+    // 获取当前监听的端口，返回值为主机字节序
     p = ngx_inet_get_port(sa);
 
     port = cmcf->ports->elts;
@@ -1210,7 +1212,7 @@ ngx_http_add_listen(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
     }
 
     /* add a port to the port list */
-
+    // 如果当前所要监听的端口不存在ports数组中,则将该端口添加到ports数组中
     port = ngx_array_push(cmcf->ports);
     if (port == NULL) {
         return NGX_ERROR;
@@ -1219,7 +1221,7 @@ ngx_http_add_listen(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
     port->family = sa->sa_family;
     port->port = p;
     port->addrs.elts = NULL;
-
+    // 为端口p添加监听地址,
     return ngx_http_add_address(cf, cscf, port, lsopt);
 }
 
@@ -1327,7 +1329,7 @@ ngx_http_add_address(ngx_conf_t *cf, ngx_http_core_srv_conf_t *cscf,
     ngx_http_conf_port_t *port, ngx_http_listen_opt_t *lsopt)
 {
     ngx_http_conf_addr_t  *addr;
-
+    // 一个端口可能对应几个主机地址，具体看当前主机有多少个 ip 地址
     if (port->addrs.elts == NULL) {
         if (ngx_array_init(&port->addrs, cf->temp_pool, 4,
                            sizeof(ngx_http_conf_addr_t))

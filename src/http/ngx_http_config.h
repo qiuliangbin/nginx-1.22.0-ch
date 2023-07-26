@@ -22,14 +22,17 @@ typedef struct {
 
 
 typedef struct { /* 可以把不需要调用的函数指针设置为 NULL */
-    /* 解析配置文件之前被调用 */
+    /* 在解析http{}块内的配置项前回调 */
     ngx_int_t   (*preconfiguration)(ngx_conf_t *cf);
-    /* 完成配置文件的解析后被调用 */
+    /* 在解析http{}块内的配置项后回调 */
     ngx_int_t   (*postconfiguration)(ngx_conf_t *cf);
-    /* 创建存储main级别的全局配置项的结构体（直属于http块） */
-
+    /*
+     * 创建用于存储HTTP全局配置项的结构体；
+     * 该结构体中的成员将保存直属于http{}块的配置项参数；
+     * 该方法在解析main配置项前调用；
+     */
     void       *(*create_main_conf)(ngx_conf_t *cf);
-    /* 初始化main级别的配置项 */
+    /* 解析完main配置项后回调 */
     char       *(*init_main_conf)(ngx_conf_t *cf, void *conf);
 
     /* 创建存储srv级别的配置项的结构体（直属于server块） */

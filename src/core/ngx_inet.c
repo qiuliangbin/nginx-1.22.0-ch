@@ -763,17 +763,17 @@ ngx_parse_url(ngx_pool_t *pool, ngx_url_t *u)
 
     p = u->url.data;
     len = u->url.len;
-
+    // 检测是否为unix域协议簇
     if (len >= 5 && ngx_strncasecmp(p, (u_char *)"unix:", 5) == 0)
     {
         return ngx_parse_unix_domain_url(pool, u);
     }
-
+    // 检测是否为IPV6协议簇
     if (len && p[0] == '[')
     {
         return ngx_parse_inet6_url(pool, u);
     }
-
+    // 默认使用IPV4协议簇
     return ngx_parse_inet_url(pool, u);
 }
 
@@ -871,7 +871,7 @@ ngx_parse_inet_url(ngx_pool_t *pool, ngx_url_t *u)
     u->socklen = sizeof(struct sockaddr_in);
     sin = (struct sockaddr_in *)&u->sockaddr;
     sin->sin_family = AF_INET;
-
+    // IPV4协议簇
     u->family = AF_INET;
 
     host = u->url.data;
@@ -919,7 +919,7 @@ ngx_parse_inet_url(ngx_pool_t *pool, ngx_url_t *u)
 
         if (u->listen)
         {
-            dash = ngx_strlchr(port, last, '-');
+            dash = ngx_strlchr(port, last, '-'); // 支持监听端口范围: 8082-8085
 
             if (dash)
             {
@@ -938,7 +938,7 @@ ngx_parse_inet_url(ngx_pool_t *pool, ngx_url_t *u)
                 len = dash - port - 1;
             }
         }
-
+        // 验证端口是否为Integer和取值合法性
         n = ngx_atoi(port, len);
 
         if (n < 1 || n > 65535)
@@ -952,10 +952,11 @@ ngx_parse_inet_url(ngx_pool_t *pool, ngx_url_t *u)
             u->err = "invalid port range";
             return NGX_ERROR;
         }
-
+        // 设置当前端口为监听端口
         u->port = (in_port_t)n;
+        // 将端口转换为网络字节序
         sin->sin_port = htons((in_port_t)n);
-
+        // 端口以字符串形式存放
         u->port_text.len = last - port;
         u->port_text.data = port;
 
@@ -1038,8 +1039,11 @@ ngx_parse_inet_url(ngx_pool_t *pool, ngx_url_t *u)
     no_port:
 
         u->err = NULL;
+        /* no_port 标志位，为 1 表示当前 listen 的参数中没有指定端口 */
         u->no_port = 1;
+        /* 因此使用默认端口 80 */
         u->port = u->default_port;
+        /* 将主机字节序转换为网络字节序 */
         sin->sin_port = htons(u->default_port);
         u->last_port = 0;
     }

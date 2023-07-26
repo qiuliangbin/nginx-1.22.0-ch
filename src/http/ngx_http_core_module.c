@@ -3875,7 +3875,37 @@ ngx_http_core_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     return NGX_CONF_OK;
 }
 
+/**
+ * listen配置项的解析函数,Nginx 服务通过 listen 指令的指令值监听网络请求，可以是 IP 协议的形式，也可以是 UNIX 域套接字。
+ * 如果不设置 listen 指令，Nginx 在以超级用户运行时则监听 80 端口，以非超级用户运行时则监听 8000 端口。
+ * 如下所示：
+    http {
+       server {
+           listen 127.0.0.1:8000;          # 监听127.0.0.1的8000端口
+           listen 127.0.0.1;               # 监听127.0.0.1的默认80端口（root权限）
+           listen 8000;                    # 监听本机所有IP的8000端口
+           listen *:8000;                  # 监听本机所有IP的8000端口
+           listen localhost:8000;          # 监听locahost的8000端口
+           listen [::]:8000;               # 监听IPv6的8000端口
+           listen [::1];                   # 监听IPv6的回环IP的默认80端口(root权限)
+           listen unix:/var/run/nginx.sock; # 监听域套接字文件
 
+           listen 127.0.0.1 default_server accept_filter=dataready backlog=1024;
+
+           listen *:8000 \                 # 监听本机的8000端口
+                   default_server \        # 当前服务是http指令域的主服务
+                   fastopen=30 \           # 开启fastopen功能并限定最大队列数为30
+                   deferred \              # 拒绝空数据连接
+                   reuseport \             # 工作进程共享socket这个监听端口
+                   backlog=1024 \          # 请求阻塞时挂起队列数是1024个
+                   so_keepalive=on;        # 当socket为保持连接时，开启状态检测功能
+       }
+    }
+ * @param cf
+ * @param cmd
+ * @param conf
+ * @return NGX_CONF_ERROR： 配置解析失败, NGX_CONF_OK：配置解析成功
+ */
 static char *
 ngx_http_core_listen(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
@@ -3885,17 +3915,19 @@ ngx_http_core_listen(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_url_t               u;
     ngx_uint_t              n;
     ngx_http_listen_opt_t   lsopt;
-
+    // server{} 有 listen 配置指令
     cscf->listen = 1;
-
+    // cf->args->elts 存储指令以及指令对应的参数
+    // 对于指令listen 127.0.0.1 default_server backlog=1024;来说：
+    // value[0]="listen" value[1]="127.0.0.1" value[2]="default_server" value[3]="backlog=1024"
     value = cf->args->elts;
 
     ngx_memzero(&u, sizeof(ngx_url_t));
 
     u.url = value[1];
-    u.listen = 1;
-    u.default_port = 80;
-
+    u.listen = 1; /* 标志位，为 1 表示当前端口有效 */
+    u.default_port = 80; /* 若 listen 没有指定端口，则会使用默认端口 */
+    // 解析listen指令的参数
     if (ngx_parse_url(cf->pool, &u) != NGX_OK) {
         if (u.err) {
             ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
@@ -3907,7 +3939,8 @@ ngx_http_core_listen(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     ngx_memzero(&lsopt, sizeof(ngx_http_listen_opt_t));
-
+    /* TCP 实现监听时的 backlog 队列，它表示允许正在通过三次握手建立 TCP
+     * 连接但没有任何进程开始处理的连接最大个数，linux 下设为 511 */
     lsopt.backlog = NGX_LISTEN_BACKLOG;
     lsopt.rcvbuf = -1;
     lsopt.sndbuf = -1;
@@ -3920,19 +3953,19 @@ ngx_http_core_listen(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 #if (NGX_HAVE_INET6)
     lsopt.ipv6only = 1;
 #endif
-
+    // 对监听端口的属性的设置参数
     for (n = 2; n < cf->args->nelts; n++) {
 
         if (ngx_strcmp(value[n].data, "default_server") == 0
             || ngx_strcmp(value[n].data, "default") == 0)
         {
-            lsopt.default_server = 1;
+            lsopt.default_server = 1; // 默认服务器标志
             continue;
         }
 
         if (ngx_strcmp(value[n].data, "bind") == 0) {
             lsopt.set = 1;
-            lsopt.bind = 1;
+            lsopt.bind = 1; // listen时，绑定端口
             continue;
         }
 

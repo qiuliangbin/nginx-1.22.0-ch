@@ -57,8 +57,9 @@ struct ngx_event_s {
 
     unsigned         eof:1;
     unsigned         error:1;
-
+    /* 标志位，为1表示当前事件已超时 */
     unsigned         timedout:1;
+    /* 标志位，为1表示当前事件存在于由红黑树维护的定时器中 */
     unsigned         timer_set:1;
 
     unsigned         delayed:1;
@@ -112,7 +113,7 @@ struct ngx_event_s {
     ngx_uint_t       index;
 
     ngx_log_t       *log;
-
+    /* 由红黑树维护的定时器 */
     ngx_rbtree_node_t   timer;
 
     /* the posted queue */

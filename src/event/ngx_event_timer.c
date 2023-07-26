@@ -9,8 +9,9 @@
 #include <ngx_core.h>
 #include <ngx_event.h>
 
-
+/* 所有定时器事件组成的红黑树 */
 ngx_rbtree_t              ngx_event_timer_rbtree;
+/* 红黑树的哨兵节点 */
 static ngx_rbtree_node_t  ngx_event_timer_sentinel;
 
 /*
@@ -18,10 +19,15 @@ static ngx_rbtree_node_t  ngx_event_timer_sentinel;
  * it should not be a problem, because we use the rbtree to find
  * a minimum timer value only
  */
-
+/*!
+ * 定时器事件初始化
+ * @param log 日志对象句柄
+ * @return NGX_OK: 初始化定时器成功;
+ */
 ngx_int_t
 ngx_event_timer_init(ngx_log_t *log)
 {
+    /* 初始化红黑树 */
     ngx_rbtree_init(&ngx_event_timer_rbtree, &ngx_event_timer_sentinel,
                     ngx_rbtree_insert_timer_value);
 
